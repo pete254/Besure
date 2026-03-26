@@ -1,0 +1,204 @@
+// src/app/api/policies/route.ts
+
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { policies, customers, vehicles, insurers, policyBenefits, payments } from "@/drizzle/schema";
+import { eq, desc } from "drizzle-orm";
+import { z } from "zod";
+
+const createPolicySchema = z.object({
+  insuranceType: z.enum([
+    "Motor - Private", "Motor - Commercial", "Motor - PSV / Matatu",
+    "Fire & Perils", "Domestic Package", "Medical / Health",
+    "Life Insurance", "Travel Insurance",
+  ]),
+  customerId: z.string().uuid(),
+  insurerId: z.string().uuid().optional().nullable(),
+  insurerNameManual: z.string().optional().nullable(),
+  vehicle: z.object({
+    make: z.string().min(1),
+    model: z.string().min(1),
+    year: z.number().int(),
+    cc: z.number().optional().nullable(),
+    tonnage: z.string().optional().nullable(),
+    seats: z.number().optional().nullable(),
+    chassisNo: z.string().min(1),
+    engineNo: z.string().min(1),
+    regNo: z.string().min(1),
+    bodyType: z.string().optional().nullable(),
+    colour: z.string().optional().nullable(),
+  }).optional().nullable(),
+  coverType: z.enum(["Comprehensive", "TPO", "TPFT"]).optional().nullable(),
+  sumInsured: z.string().optional().nullable(),
+  startDate: z.string(),
+  endDate: z.string(),
+  policyNumber: z.string().optional().nullable(),
+  basicRate: z.string().optional().nullable(),
+  basicPremium: z.string().optional().nullable(),
+  iraLevy: z.string().optional().nullable(),
+  trainingLevy: z.string().optional().nullable(),
+  stampDuty: z.string().default("40"),
+  phcf: z.string().default("100"),
+  benefits: z.array(z.object({
+    benefitOptionId: z.string().optional().nullable(),
+    benefitName: z.string(),
+    amountKes: z.string(),
+  })).default([]),
+  totalBenefits: z.string().default("0"),
+  grandTotal: z.string().optional().nullable(),
+  paymentMode: z.enum(["Full Payment", "2 Installments", "3 Installments", "IPF"]),
+  ipfProvider: z.string().optional().nullable(),
+  ipfLoanReference: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+// GET /api/policies
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
+    const offset = (page - 1) * limit;
+
+    const results = await db
+      .select({
+        policy: policies,
+        customer: {
+          id: customers.id,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+          companyName: customers.companyName,
+          customerType: customers.customerType,
+          phone: customers.phone,
+        },
+        insurer: {
+          id: insurers.id,
+          name: insurers.name,
+        },
+      })
+      .from(policies)
+      .leftJoin(customers, eq(policies.customerId, customers.id))
+      .leftJoin(insurers, eq(policies.insurerId, insurers.id))
+      .orderBy(desc(policies.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return NextResponse.json({ policies: results, page, limit });
+  } catch (error) {
+    console.error("GET /api/policies error:", error);
+    return NextResponse.json({ error: "Failed to fetch policies" }, { status: 500 });
+  }
+}
+
+// POST /api/policies
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const parsed = createPolicySchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", issues: parsed.error.issues },
+        { status: 400 }
+      );
+    }
+
+    const data = parsed.data;
+    const isMotor = data.insuranceType.startsWith("Motor");
+
+    // Create policy
+    const [newPolicy] = await db.insert(policies).values({
+      customerId: data.customerId,
+      insurerId: data.insurerId || null,
+      insurerNameManual: data.insurerNameManual || null,
+      insuranceType: data.insuranceType,
+      coverType: data.coverType || null,
+      policyNumber: data.policyNumber || null,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      sumInsured: data.sumInsured || null,
+      basicRate: data.basicRate || null,
+      basicPremium: data.basicPremium || null,
+      iraLevy: data.iraLevy || null,
+      trainingLevy: data.trainingLevy || null,
+      stampDuty: data.stampDuty,
+      phcf: data.phcf,
+      totalBenefits: data.totalBenefits,
+      grandTotal: data.grandTotal || null,
+      paymentMode: data.paymentMode,
+      ipfProvider: data.ipfProvider || null,
+      ipfLoanReference: data.ipfLoanReference || null,
+      notes: data.notes || null,
+      status: "Active",
+    }).returning();
+
+    // Create vehicle record if motor
+    if (isMotor && data.vehicle) {
+      await db.insert(vehicles).values({
+        policyId: newPolicy.id,
+        make: data.vehicle.make,
+        model: data.vehicle.model,
+        year: data.vehicle.year,
+        cc: data.vehicle.cc || null,
+        tonnage: data.vehicle.tonnage || null,
+        seats: data.vehicle.seats || null,
+        chassisNo: data.vehicle.chassisNo,
+        engineNo: data.vehicle.engineNo,
+        regNo: data.vehicle.regNo,
+        bodyType: data.vehicle.bodyType as any || null,
+        colour: data.vehicle.colour || null,
+      });
+    }
+
+    // Create policy benefits
+    if (data.benefits.length > 0) {
+      await db.insert(policyBenefits).values(
+        data.benefits.map((b) => ({
+          policyId: newPolicy.id,
+          benefitOptionId: b.benefitOptionId || null,
+          benefitName: b.benefitName,
+          amountKes: b.amountKes,
+        }))
+      );
+    }
+
+    // Create payment schedule
+    const total = parseFloat(data.grandTotal || "0");
+    if (data.paymentMode === "Full Payment") {
+      await db.insert(payments).values({
+        policyId: newPolicy.id,
+        installmentNumber: 1,
+        totalInstallments: 1,
+        amountDue: data.grandTotal || "0",
+        dueDate: data.startDate,
+        status: "pending",
+      });
+    } else if (data.paymentMode === "2 Installments") {
+      const half = (total / 2).toFixed(2);
+      const date1 = data.startDate;
+      const date2 = new Date(data.startDate);
+      date2.setDate(date2.getDate() + 30);
+      await db.insert(payments).values([
+        { policyId: newPolicy.id, installmentNumber: 1, totalInstallments: 2, amountDue: half, dueDate: date1, status: "pending" },
+        { policyId: newPolicy.id, installmentNumber: 2, totalInstallments: 2, amountDue: half, dueDate: date2.toISOString().split("T")[0], status: "pending" },
+      ]);
+    } else if (data.paymentMode === "3 Installments") {
+      const third1 = (total / 3).toFixed(2);
+      const third2 = (total / 3).toFixed(2);
+      const third3 = (total - parseFloat(third1) - parseFloat(third2)).toFixed(2);
+      const date1 = data.startDate;
+      const date2 = new Date(data.startDate); date2.setDate(date2.getDate() + 30);
+      const date3 = new Date(data.startDate); date3.setDate(date3.getDate() + 60);
+      await db.insert(payments).values([
+        { policyId: newPolicy.id, installmentNumber: 1, totalInstallments: 3, amountDue: third1, dueDate: date1, status: "pending" },
+        { policyId: newPolicy.id, installmentNumber: 2, totalInstallments: 3, amountDue: third2, dueDate: date2.toISOString().split("T")[0], status: "pending" },
+        { policyId: newPolicy.id, installmentNumber: 3, totalInstallments: 3, amountDue: third3, dueDate: date3.toISOString().split("T")[0], status: "pending" },
+      ]);
+    }
+
+    return NextResponse.json({ policy: newPolicy }, { status: 201 });
+  } catch (error) {
+    console.error("POST /api/policies error:", error);
+    return NextResponse.json({ error: "Failed to create policy" }, { status: 500 });
+  }
+}

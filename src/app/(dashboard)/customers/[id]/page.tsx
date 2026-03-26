@@ -1,0 +1,301 @@
+// src/app/(dashboard)/customers/[id]/page.tsx
+
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import {
+  ArrowLeft, Pencil, Phone, Mail, MapPin, CreditCard,
+  Building2, User, FileText, Calendar, Hash
+} from "lucide-react";
+
+interface Customer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string | null;
+  phone: string;
+  email?: string | null;
+  idNumber?: string | null;
+  kraPin?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  county?: string | null;
+  physicalAddress?: string | null;
+  customerType: "Individual" | "Company";
+  companyName?: string | null;
+  createdAt: string;
+}
+
+const cardStyle = {
+  backgroundColor: "var(--bg-card)",
+  border: "1px solid var(--border)",
+  borderRadius: "10px",
+  padding: "20px",
+};
+
+const labelStyle = {
+  fontSize: "11px",
+  fontWeight: 600 as const,
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.05em",
+  color: "var(--text-muted)",
+  marginBottom: "3px",
+};
+
+const valueStyle = {
+  fontSize: "14px",
+  fontWeight: 500 as const,
+  color: "#ffffff",
+};
+
+function Field({ label, value, icon }: { label: string; value?: string | null; icon?: React.ReactNode }) {
+  return (
+    <div>
+      <p style={labelStyle}>{label}</p>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        {icon && <span style={{ color: "var(--text-muted)" }}>{icon}</span>}
+        <p style={valueStyle}>
+          {value || <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>—</span>}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function CustomerProfilePage() {
+  const { id } = useParams();
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function fetchCustomer() {
+      try {
+        const res = await fetch(`/api/customers/${id}`);
+        if (!res.ok) throw new Error("Customer not found");
+        const data = await res.json();
+        setCustomer(data.customer);
+      } catch {
+        setError("Could not load customer.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (id) fetchCustomer();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)" }}>
+        Loading customer...
+      </div>
+    );
+  }
+
+  if (error || !customer) {
+    return (
+      <div style={{ padding: "48px", textAlign: "center" }}>
+        <p style={{ color: "#fca5a5", marginBottom: "12px" }}>{error || "Customer not found."}</p>
+        <Link href="/customers" style={{ color: "var(--brand)", fontSize: "13px" }}>
+          ← Back to Customers
+        </Link>
+      </div>
+    );
+  }
+
+  const displayName = customer.customerType === "Company"
+    ? customer.companyName
+    : `${customer.firstName}${customer.middleName ? " " + customer.middleName : ""} ${customer.lastName}`;
+
+  const initials = customer.customerType === "Company"
+    ? (customer.companyName?.slice(0, 2) || "CO").toUpperCase()
+    : `${customer.firstName[0]}${customer.lastName[0]}`.toUpperCase();
+
+  return (
+    <div style={{ maxWidth: "900px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "16px" }}>
+
+      {/* Back */}
+      <Link
+        href="/customers"
+        style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--text-muted)", fontSize: "13px", textDecoration: "none" }}
+        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-secondary)")}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-muted)")}
+      >
+        <ArrowLeft size={14} /> Back to Customers
+      </Link>
+
+      {/* Profile header */}
+      <div
+        style={{
+          ...cardStyle,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "16px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          {/* Avatar */}
+          <div
+            style={{
+              width: "56px",
+              height: "56px",
+              borderRadius: "50%",
+              backgroundColor: "var(--brand-dim)",
+              border: "2px solid var(--brand)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "var(--brand)",
+              flexShrink: 0,
+            }}
+          >
+            {initials}
+          </div>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#ffffff", margin: 0 }}>
+                {displayName}
+              </h2>
+              {/* Type badge */}
+              <span
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: "20px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  backgroundColor: customer.customerType === "Company"
+                    ? "rgba(139,92,246,0.15)" : "rgba(16,185,129,0.15)",
+                  color: customer.customerType === "Company" ? "#a78bfa" : "var(--brand)",
+                }}
+              >
+                {customer.customerType === "Company"
+                  ? <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Building2 size={10} /> Company</span>
+                  : <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><User size={10} /> Individual</span>
+                }
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              {customer.phone && (
+                <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                  <Phone size={12} /> {customer.phone}
+                </span>
+              )}
+              {customer.email && (
+                <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                  <Mail size={12} /> {customer.email}
+                </span>
+              )}
+              {customer.county && (
+                <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                  <MapPin size={12} /> {customer.county}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Edit button */}
+        <Link
+          href={`/customers/${customer.id}/edit`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "8px 14px",
+            backgroundColor: "var(--bg-hover)",
+            border: "1px solid var(--border)",
+            borderRadius: "8px",
+            color: "#ffffff",
+            fontSize: "13px",
+            fontWeight: 600,
+            textDecoration: "none",
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "var(--brand)")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "var(--border)")}
+        >
+          <Pencil size={13} /> Edit
+        </Link>
+      </div>
+
+      {/* Details grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+
+        {/* Personal details */}
+        <div style={cardStyle}>
+          <p style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+            Personal Details
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <Field label="First Name" value={customer.firstName} />
+            <Field label="Last Name" value={customer.lastName} />
+            <Field label="Middle Name" value={customer.middleName} />
+            <Field label="Gender" value={customer.gender} />
+            <Field
+              label="Date of Birth"
+              value={customer.dateOfBirth ? new Date(customer.dateOfBirth).toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" }) : null}
+              icon={<Calendar size={12} />}
+            />
+            <Field label="County" value={customer.county} icon={<MapPin size={12} />} />
+          </div>
+          {customer.physicalAddress && (
+            <div style={{ marginTop: "16px" }}>
+              <Field label="Physical Address" value={customer.physicalAddress} />
+            </div>
+          )}
+        </div>
+
+        {/* ID & Financial */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div style={cardStyle}>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+              Identity & Tax
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <Field label="National ID" value={customer.idNumber} icon={<Hash size={12} />} />
+              <Field label="KRA PIN" value={customer.kraPin} icon={<CreditCard size={12} />} />
+            </div>
+          </div>
+
+          {/* Customer since */}
+          <div style={cardStyle}>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+              Account Info
+            </p>
+            <Field
+              label="Customer Since"
+              value={new Date(customer.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" })}
+              icon={<Calendar size={12} />}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Policies placeholder */}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+          <p style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", margin: 0 }}>
+            <FileText size={14} style={{ display: "inline", marginRight: "6px", verticalAlign: "middle" }} />
+            Policies
+          </p>
+          <Link
+            href={`/policies/new?customerId=${customer.id}`}
+            style={{ fontSize: "12px", color: "var(--brand)", textDecoration: "none", fontWeight: 600 }}
+          >
+            + New Policy
+          </Link>
+        </div>
+        <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>
+          No policies yet. Policies will appear here once created.
+        </p>
+      </div>
+
+    </div>
+  );
+}
