@@ -2,10 +2,10 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Upload, X, FileText } from "lucide-react";
 
 const KENYA_COUNTIES = [
   "Baringo","Bomet","Bungoma","Busia","Elgeyo-Marakwet","Embu","Garissa",
@@ -17,7 +17,75 @@ const KENYA_COUNTIES = [
   "Turkana","Uasin Gishu","Vihiga","Wajir","West Pokot",
 ];
 
-const inputStyle = {
+interface Director {
+  name: string;
+  idNumberValue: string;
+  kraPinValue: string;
+}
+
+const emptyDirector: Director = { name: "", idNumberValue: "", kraPinValue: "" };
+
+// Reusable doc field: text value + optional file upload side by side
+function DocField({
+  label,
+  valueKey,
+  fileKey,
+  value,
+  fileName,
+  onChange,
+}: {
+  label: string;
+  valueKey: string;
+  fileKey: string;
+  value: string;
+  fileName: string;
+  onChange: (key: string, val: string) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div>
+      <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>
+        {label}
+      </label>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        {/* Text Value */}
+        <div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 500 }}>Number / Value</div>
+          <input
+            type="text"
+            value={value || ""}
+            onChange={(e) => onChange(valueKey, e.target.value)}
+            placeholder={`Enter ${label} value`}
+            style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+            onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+            onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+          />
+        </div>
+
+        {/* File Upload */}
+        <div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 500 }}>Upload Document</div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onChange(fileKey, file.name);
+            }}
+            style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+            onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+            onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+          />
+          {fileName && <div style={{ fontSize: "11px", color: "var(--brand)", marginTop: "4px" }}>✓ {fileName}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "9px 12px",
   backgroundColor: "var(--bg-app)",
@@ -28,26 +96,26 @@ const inputStyle = {
   outline: "none",
 };
 
-const labelStyle = {
+const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: "12px",
-  fontWeight: 600 as const,
+  fontWeight: 600,
   color: "var(--text-secondary)",
   marginBottom: "5px",
-  textTransform: "uppercase" as const,
+  textTransform: "uppercase",
   letterSpacing: "0.05em",
 };
 
-const sectionStyle = {
+const sectionStyle: React.CSSProperties = {
   backgroundColor: "var(--bg-card)",
   border: "1px solid var(--border)",
   borderRadius: "10px",
   padding: "20px",
 };
 
-const sectionTitleStyle = {
+const sectionTitleStyle: React.CSSProperties = {
   fontSize: "13px",
-  fontWeight: 700 as const,
+  fontWeight: 700,
   color: "#ffffff",
   marginBottom: "16px",
   paddingBottom: "10px",
@@ -60,21 +128,37 @@ export default function EditCustomerPage() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
+  const [directors, setDirectors] = useState<Director[]>([]);
 
   const [form, setForm] = useState({
+    // Individual
     firstName: "",
     lastName: "",
     middleName: "",
     phone: "",
     email: "",
-    idNumber: "",
-    kraPin: "",
     dateOfBirth: "",
     gender: "",
     county: "",
     physicalAddress: "",
     customerType: "Individual",
+    // ID docs — value + file name
+    idNumberValue: "",
+    idNumberFile: "",
+    kraPinValue: "",
+    kraPinFile: "",
+    // Company
     companyName: "",
+    town: "",
+    postalAddress: "",
+    companyEmail: "",
+    companyPhone: "",
+    certOfIncorporationValue: "",
+    certOfIncorporationFile: "",
+    cr12Value: "",
+    cr12File: "",
+    companyKraPinValue: "",
+    companyKraPinFile: "",
   });
 
   useEffect(() => {
@@ -90,15 +174,36 @@ export default function EditCustomerPage() {
           middleName: c.middleName || "",
           phone: c.phone || "",
           email: c.email || "",
-          idNumber: c.idNumber || "",
-          kraPin: c.kraPin || "",
           dateOfBirth: c.dateOfBirth ? c.dateOfBirth.split("T")[0] : "",
           gender: c.gender || "",
           county: c.county || "",
           physicalAddress: c.physicalAddress || "",
           customerType: c.customerType || "Individual",
+          // Populate ID doc values from DB
+          idNumberValue: c.idNumberValue || c.idNumber || "",
+          idNumberFile: "",
+          kraPinValue: c.kraPinValue || c.kraPin || "",
+          kraPinFile: "",
           companyName: c.companyName || "",
+          town: c.town || "",
+          postalAddress: c.postalAddress || "",
+          companyEmail: c.companyEmail || "",
+          companyPhone: c.companyPhone || "",
+          certOfIncorporationValue: c.certOfIncorporationValue || "",
+          certOfIncorporationFile: "",
+          cr12Value: c.cr12Value || "",
+          cr12File: "",
+          companyKraPinValue: c.companyKraPinValue || "",
+          companyKraPinFile: "",
         });
+        // Restore directors
+        if (c.directors && Array.isArray(c.directors)) {
+          setDirectors(c.directors.map((d: any) => ({
+            name: d.name || "",
+            idNumberValue: d.idNumberValue || d.idNumber || "",
+            kraPinValue: d.kraPinValue || d.kraPin || "",
+          })));
+        }
       } catch {
         setError("Could not load customer.");
       } finally {
@@ -114,6 +219,10 @@ export default function EditCustomerPage() {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
+  function handleDocValue(key: string, val: string) {
+    setForm((prev) => ({ ...prev, [key]: val }));
+  }
+
   function focusStyle(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     (e.target as HTMLElement).style.borderColor = "var(--brand)";
     (e.target as HTMLElement).style.boxShadow = "0 0 0 2px rgba(16,185,129,0.15)";
@@ -124,16 +233,41 @@ export default function EditCustomerPage() {
     (e.target as HTMLElement).style.boxShadow = "none";
   }
 
+  function addDirector() {
+    setDirectors((prev) => [...prev, { ...emptyDirector }]);
+  }
+
+  function updateDirector(index: number, field: keyof Director, value: string) {
+    setDirectors((prev) => prev.map((d, i) => i === index ? { ...d, [field]: value } : d));
+  }
+
+  function removeDirector(index: number) {
+    setDirectors((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
+      // Strip file-name-only keys before sending to API
+      const { idNumberFile, kraPinFile, certOfIncorporationFile, cr12File, companyKraPinFile, ...formData } = form;
+
+      const payload = {
+        ...formData,
+        // Keep idNumber/kraPin in sync with values for backward compat
+        idNumber: form.idNumberValue || null,
+        idNumberValue: form.idNumberValue || null,
+        kraPin: form.kraPinValue || null,
+        kraPinValue: form.kraPinValue || null,
+        directors: directors.length > 0 ? directors : null,
+      };
+
       const res = await fetch(`/api/customers/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -150,6 +284,8 @@ export default function EditCustomerPage() {
       setLoading(false);
     }
   }
+
+  const isCompany = form.customerType === "Company";
 
   if (fetching) {
     return (
@@ -191,16 +327,11 @@ export default function EditCustomerPage() {
               <label
                 key={type}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "10px 16px",
+                  display: "flex", alignItems: "center", gap: "8px", padding: "10px 16px",
                   borderRadius: "8px",
                   border: `1px solid ${form.customerType === type ? "var(--brand)" : "var(--border)"}`,
                   backgroundColor: form.customerType === type ? "rgba(16,185,129,0.08)" : "var(--bg-app)",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                  fontWeight: 600,
+                  cursor: "pointer", fontSize: "13px", fontWeight: 600,
                   color: form.customerType === type ? "var(--brand)" : "var(--text-secondary)",
                 }}
               >
@@ -209,17 +340,40 @@ export default function EditCustomerPage() {
               </label>
             ))}
           </div>
-          {form.customerType === "Company" && (
-            <div style={{ marginTop: "16px" }}>
-              <label style={labelStyle}>Company Name *</label>
-              <input name="companyName" value={form.companyName} onChange={handleChange} placeholder="e.g. Acme Ltd" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-            </div>
-          )}
         </div>
+
+        {/* Company Details */}
+        {isCompany && (
+          <div style={sectionStyle}>
+            <p style={sectionTitleStyle}>Company Details</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <div style={{ gridColumn: "span 2" }}>
+                <label style={labelStyle}>Company Name *</label>
+                <input name="companyName" value={form.companyName} onChange={handleChange} placeholder="e.g. Acme Ltd" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Town</label>
+                <input name="town" value={form.town} onChange={handleChange} placeholder="e.g. Nairobi" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Postal Address</label>
+                <input name="postalAddress" value={form.postalAddress} onChange={handleChange} placeholder="e.g. P.O Box 1234-00100" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Company Email</label>
+                <input name="companyEmail" type="email" value={form.companyEmail} onChange={handleChange} placeholder="info@company.co.ke" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Company Phone</label>
+                <input name="companyPhone" value={form.companyPhone} onChange={handleChange} placeholder="0700 000 000" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Personal Information */}
         <div style={sectionStyle}>
-          <p style={sectionTitleStyle}>Personal Information</p>
+          <p style={sectionTitleStyle}>{isCompany ? "Primary Contact Person" : "Personal Information"}</p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
             <div>
               <label style={labelStyle}>First Name *</label>
@@ -241,27 +395,23 @@ export default function EditCustomerPage() {
               <label style={labelStyle}>Email Address</label>
               <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="john@email.com" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
             </div>
-            <div>
-              <label style={labelStyle}>Date of Birth</label>
-              <input name="dateOfBirth" type="date" value={form.dateOfBirth} onChange={handleChange} style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Gender</label>
-              <select name="gender" value={form.gender} onChange={handleChange} style={inputStyle} onFocus={focusStyle} onBlur={blurStyle}>
-                <option value="">Select gender</option>
-                <option>Male</option>
-                <option>Female</option>
-                <option>Other</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>National ID Number</label>
-              <input name="idNumber" value={form.idNumber} onChange={handleChange} placeholder="12345678" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>KRA PIN</label>
-              <input name="kraPin" value={form.kraPin} onChange={handleChange} placeholder="A123456789B" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-            </div>
+            {!isCompany && (
+              <div>
+                <label style={labelStyle}>Date of Birth</label>
+                <input name="dateOfBirth" type="date" value={form.dateOfBirth} onChange={handleChange} style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              </div>
+            )}
+            {!isCompany && (
+              <div>
+                <label style={labelStyle}>Gender</label>
+                <select name="gender" value={form.gender} onChange={handleChange} style={inputStyle} onFocus={focusStyle} onBlur={blurStyle}>
+                  <option value="">Select gender</option>
+                  <option>Male</option>
+                  <option>Female</option>
+                  <option>Other</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -282,6 +432,142 @@ export default function EditCustomerPage() {
             </div>
           </div>
         </div>
+
+        {/* Individual Documents */}
+        {!isCompany && (
+          <div style={sectionStyle}>
+            <p style={sectionTitleStyle}>Identity Documents</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
+              <DocField
+                label="National ID"
+                valueKey="idNumberValue"
+                fileKey="idNumberFile"
+                value={form.idNumberValue}
+                fileName={form.idNumberFile}
+                onChange={handleDocValue}
+              />
+              <DocField
+                label="KRA PIN"
+                valueKey="kraPinValue"
+                fileKey="kraPinFile"
+                value={form.kraPinValue}
+                fileName={form.kraPinFile}
+                onChange={handleDocValue}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Company Documents */}
+        {isCompany && (
+          <div style={sectionStyle}>
+            <p style={sectionTitleStyle}>Company Documents</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
+              <DocField
+                label="Certificate of Incorporation"
+                valueKey="certOfIncorporationValue"
+                fileKey="certOfIncorporationFile"
+                value={form.certOfIncorporationValue}
+                fileName={form.certOfIncorporationFile}
+                onChange={handleDocValue}
+              />
+              <DocField
+                label="CR12"
+                valueKey="cr12Value"
+                fileKey="cr12File"
+                value={form.cr12Value}
+                fileName={form.cr12File}
+                onChange={handleDocValue}
+              />
+              <DocField
+                label="KRA PIN (Company)"
+                valueKey="companyKraPinValue"
+                fileKey="companyKraPinFile"
+                value={form.companyKraPinValue}
+                fileName={form.companyKraPinFile}
+                onChange={handleDocValue}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Directors — Company only */}
+        {isCompany && (
+          <div style={sectionStyle}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+              <p style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", margin: 0 }}>Directors / Signatories</p>
+              <button
+                type="button"
+                onClick={addDirector}
+                style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 12px", backgroundColor: "var(--brand-dim)", border: "1px solid var(--brand)", borderRadius: "6px", color: "var(--brand)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+              >
+                <Plus size={13} /> Add Director
+              </button>
+            </div>
+
+            {directors.length === 0 ? (
+              <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>No directors added. Click "Add Director" to add one.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {directors.map((d, i) => (
+                  <div key={i} style={{ padding: "16px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                      <p style={{ fontSize: "12px", fontWeight: 700, color: "var(--brand)", margin: 0 }}>Director {i + 1}</p>
+                      <button
+                        type="button"
+                        onClick={() => removeDirector(i)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex", padding: "2px" }}
+                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "#f87171")}
+                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-muted)")}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+                      <div style={{ gridColumn: "span 3" }}>
+                        <label style={labelStyle}>Full Name</label>
+                        <input
+                          value={d.name}
+                          onChange={(e) => updateDirector(i, "name", e.target.value)}
+                          placeholder="Director full name"
+                          style={inputStyle}
+                          onFocus={focusStyle}
+                          onBlur={blurStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>National ID Number</label>
+                        <input
+                          value={d.idNumberValue}
+                          onChange={(e) => updateDirector(i, "idNumberValue", e.target.value)}
+                          placeholder="ID number"
+                          style={inputStyle}
+                          onFocus={focusStyle}
+                          onBlur={blurStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>KRA PIN</label>
+                        <input
+                          value={d.kraPinValue}
+                          onChange={(e) => updateDirector(i, "kraPinValue", e.target.value)}
+                          placeholder="KRA PIN"
+                          style={inputStyle}
+                          onFocus={focusStyle}
+                          onBlur={blurStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>ID Copy</label>
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ ...inputStyle, color: "var(--text-secondary)" }} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
