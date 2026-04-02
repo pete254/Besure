@@ -6,6 +6,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
+import Image from "next/image";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -52,73 +53,96 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ backgroundColor: "var(--bg-primary)" }}
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        backgroundColor: "var(--bg-app)",
+        position: "relative",
+      }}
     >
       {/* Subtle radial glow behind card */}
       <div
-        className="absolute inset-0 pointer-events-none"
         style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
           background:
             "radial-gradient(ellipse 60% 50% at 50% 40%, rgba(16,185,129,0.08) 0%, transparent 70%)",
         }}
       />
 
-      <div className="relative w-full max-w-md">
+      <div style={{ position: "relative", width: "100%", maxWidth: "420px" }}>
         {/* Card */}
         <div
-          className="rounded-2xl overflow-hidden shadow-2xl"
           style={{
-            backgroundColor: "var(--bg-secondary)",
-            border: "1px solid var(--bg-border)",
+            backgroundColor: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "16px",
+            overflow: "hidden",
             boxShadow: "0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(16,185,129,0.1)",
           }}
         >
           {/* Top accent bar */}
           <div
-            className="h-1"
             style={{
-              background:
-                "linear-gradient(to right, #059669, #10b981, #34d399)",
+              height: "3px",
+              background: "linear-gradient(to right, #059669, #10b981, #34d399)",
             }}
           />
 
-          <div className="p-8 sm:p-10">
-            {/* Logo */}
-            <div className="mb-8">
-              <div className="flex justify-center mb-6">
+          <div style={{ padding: "40px 36px" }}>
+            {/* Logo + title */}
+            <div style={{ marginBottom: "32px", textAlign: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
                 <img
                   src="/besure_logo.png"
                   alt="BeSure Insurance"
-                  className="w-28 h-28 object-contain drop-shadow-lg"
+                  style={{ width: "80px", height: "auto", display: "block", margin: "0 auto" }}
                 />
               </div>
-              <div className="text-center">
-                <h2
-                  className="text-2xl font-bold tracking-tight"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  Welcome back
-                </h2>
-                <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-                  Sign in to your agency dashboard
-                </p>
-              </div>
+              <h2
+                style={{
+                  fontSize: "22px",
+                  fontWeight: 700,
+                  color: "#ffffff",
+                  margin: "0 0 6px",
+                  letterSpacing: "-0.3px",
+                }}
+              >
+                Welcome back
+              </h2>
+              <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
+                Sign in to your agency dashboard
+              </p>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {/* Error */}
               {error && (
                 <div
-                  className="flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
                   style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "10px",
+                    padding: "12px 14px",
+                    borderRadius: "8px",
                     backgroundColor: "rgba(239,68,68,0.1)",
                     border: "1px solid rgba(239,68,68,0.2)",
                     color: "#fca5a5",
+                    fontSize: "13px",
                   }}
                 >
-                  <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg
+                    style={{ width: "14px", height: "14px", marginTop: "1px", flexShrink: 0 }}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                   </svg>
                   {error}
@@ -126,11 +150,16 @@ export default function LoginPage() {
               )}
 
               {/* Email */}
-              <div className="space-y-1.5">
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label
-                  className="text-sm font-semibold"
                   htmlFor="email"
-                  style={{ color: "var(--text-secondary)" }}
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "var(--text-secondary)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
                 >
                   Email address
                 </label>
@@ -142,29 +171,39 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@besure.co.ke"
                   required
-                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-150"
                   style={{
-                    backgroundColor: "var(--bg-elevated)",
-                    border: "1px solid var(--bg-border)",
-                    color: "var(--text-primary)",
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    backgroundColor: "var(--bg-app)",
+                    border: "1px solid var(--border)",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    outline: "none",
+                    transition: "border-color 0.15s, box-shadow 0.15s",
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = "var(--brand-green)";
+                    e.target.style.borderColor = "var(--brand)";
                     e.target.style.boxShadow = "0 0 0 3px rgba(16,185,129,0.15)";
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = "var(--bg-border)";
+                    e.target.style.borderColor = "var(--border)";
                     e.target.style.boxShadow = "none";
                   }}
                 />
               </div>
 
               {/* Password */}
-              <div className="space-y-1.5">
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label
-                  className="text-sm font-semibold"
                   htmlFor="password"
-                  style={{ color: "var(--text-secondary)" }}
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "var(--text-secondary)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
                 >
                   Password
                 </label>
@@ -176,18 +215,23 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-150"
                   style={{
-                    backgroundColor: "var(--bg-elevated)",
-                    border: "1px solid var(--bg-border)",
-                    color: "var(--text-primary)",
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    backgroundColor: "var(--bg-app)",
+                    border: "1px solid var(--border)",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    outline: "none",
+                    transition: "border-color 0.15s, box-shadow 0.15s",
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = "var(--brand-green)";
+                    e.target.style.borderColor = "var(--brand)";
                     e.target.style.boxShadow = "0 0 0 3px rgba(16,185,129,0.15)";
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = "var(--bg-border)";
+                    e.target.style.borderColor = "var(--border)";
                     e.target.style.boxShadow = "none";
                   }}
                 />
@@ -197,24 +241,40 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full font-semibold py-2.5 px-4 rounded-xl text-sm transition-all duration-150 mt-2 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
                 style={{
-                  backgroundColor: loading ? "var(--brand-green-dark)" : "var(--brand-green)",
-                  color: "var(--text-inverse)",
-                  boxShadow: "0 4px 15px rgba(16,185,129,0.3)",
+                  width: "100%",
+                  padding: "11px 16px",
+                  borderRadius: "8px",
+                  backgroundColor: loading ? "var(--brand-dark)" : "var(--brand)",
+                  color: "#000000",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: loading ? "not-allowed" : "pointer",
+                  marginTop: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  transition: "opacity 0.15s",
+                  boxShadow: "0 4px 15px rgba(16,185,129,0.25)",
                 }}
                 onMouseEnter={(e) => {
-                  if (!loading) (e.target as HTMLButtonElement).style.backgroundColor = "var(--brand-green-light)";
+                  if (!loading) (e.currentTarget as HTMLButtonElement).style.opacity = "0.88";
                 }}
                 onMouseLeave={(e) => {
-                  if (!loading) (e.target as HTMLButtonElement).style.backgroundColor = "var(--brand-green)";
+                  if (!loading) (e.currentTarget as HTMLButtonElement).style.opacity = "1";
                 }}
               >
                 {loading ? (
                   <>
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    <svg
+                      style={{ width: "14px", height: "14px", animation: "spin 1s linear infinite" }}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                     Signing in...
                   </>
@@ -227,10 +287,19 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs mt-6" style={{ color: "var(--text-muted)" }}>
+        <p
+          style={{
+            textAlign: "center",
+            fontSize: "12px",
+            color: "var(--text-muted)",
+            marginTop: "20px",
+          }}
+        >
           IRA Regulated · Kenya Motor Insurance · © {new Date().getFullYear()} BeSure Insurance Solutions
         </p>
       </div>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

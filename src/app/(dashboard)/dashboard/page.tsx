@@ -1,10 +1,9 @@
 // src/app/(dashboard)/dashboard/page.tsx
-// Full Dashboard — Phase 5
-// Charts use inline SVG (no external deps beyond what's already installed)
 
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   FileText, AlertTriangle, Users, TrendingUp, Clock,
@@ -12,7 +11,6 @@ import {
   Calendar, DollarSign, Shield, Activity,
 } from "lucide-react";
 
-// ─── Types ───────────────────────────────────────────────────
 interface DashboardData {
   expiringIn30: number;
   expiringIn7: number;
@@ -44,120 +42,61 @@ interface DashboardData {
   }[];
 }
 
-// ─── Helpers ─────────────────────────────────────────────────
 function fmt(n: number) {
   return `KES ${n.toLocaleString("en-KE", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-function fmtShort(n: number) {
+function fmtShort(n: number | undefined) {
+  if (!n || n <= 0) return "KES 0";
   if (n >= 1_000_000) return `KES ${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `KES ${(n / 1_000).toFixed(0)}K`;
   return `KES ${n.toFixed(0)}`;
 }
 
-// ─── Inline mini bar chart ────────────────────────────────────
-function BarChart({
-  data,
-  color = "var(--brand)",
-  height = 80,
-}: {
-  data: { label: string; value: number }[];
-  color?: string;
-  height?: number;
-}) {
+function BarChart({ data, color = "var(--brand)", height = 80 }: { data: { label: string; value: number }[]; color?: string; height?: number; }) {
   const max = Math.max(...data.map(d => d.value), 1);
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: "4px", height }}>
       {data.map((d, i) => (
-        <div
-          key={i}
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "3px",
-            height: "100%",
-            justifyContent: "flex-end",
-          }}
-          title={`${d.label}: ${d.value}`}
-        >
-          <div
-            style={{
-              width: "100%",
-              backgroundColor: color,
-              borderRadius: "3px 3px 0 0",
-              opacity: d.value === 0 ? 0.15 : 0.85,
-              transition: "height 0.5s ease",
-              height: `${(d.value / max) * (height - 18)}px`,
-              minHeight: d.value > 0 ? "3px" : "0",
-            }}
-          />
-          <span style={{ fontSize: "9px", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%", textAlign: "center" }}>
-            {d.label}
-          </span>
+        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", height: "100%", justifyContent: "flex-end" }} title={`${d.label}: ${d.value}`}>
+          <div style={{ width: "100%", backgroundColor: color, borderRadius: "3px 3px 0 0", opacity: d.value === 0 ? 0.15 : 0.85, height: `${(d.value / max) * (height - 18)}px`, minHeight: d.value > 0 ? "3px" : "0" }} />
+          <span style={{ fontSize: "9px", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%", textAlign: "center" }}>{d.label}</span>
         </div>
       ))}
     </div>
   );
 }
 
-// ─── Donut chart ─────────────────────────────────────────────
-function DonutChart({
-  segments,
-  size = 80,
-}: {
-  segments: { label: string; value: number; color: string }[];
-  size?: number;
-}) {
+function DonutChart({ segments, size = 80 }: { segments: { label: string; value: number; color: string }[]; size?: number; }) {
   const total = segments.reduce((s, seg) => s + seg.value, 0);
-  if (total === 0) {
-    return (
-      <div style={{ width: size, height: size, borderRadius: "50%", backgroundColor: "var(--bg-app)", border: "2px solid var(--border)", flexShrink: 0 }} />
-    );
-  }
+  if (total === 0) return <div style={{ width: size, height: size, borderRadius: "50%", backgroundColor: "var(--bg-app)", border: "2px solid var(--border)", flexShrink: 0 }} />;
   const r = size / 2 - 6;
   const cx = size / 2;
   const cy = size / 2;
   const circumference = 2 * Math.PI * r;
-
   let offset = 0;
   const arcs = segments.map(seg => {
-    const pct = seg.value / total;
-    const dash = pct * circumference;
+    const dash = (seg.value / total) * circumference;
     const arc = { offset, dash, ...seg };
     offset += dash;
     return arc;
   });
-
   return (
     <svg width={size} height={size} style={{ flexShrink: 0 }}>
       {arcs.map((arc, i) => (
-        <circle
-          key={i}
-          cx={cx}
-          cy={cy}
-          r={r}
-          fill="none"
-          stroke={arc.color}
-          strokeWidth="10"
+        <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={arc.color} strokeWidth="10"
           strokeDasharray={`${arc.dash} ${circumference - arc.dash}`}
           strokeDashoffset={-arc.offset}
-          transform={`rotate(-90 ${cx} ${cy})`}
-          style={{ transition: "stroke-dasharray 0.6s ease" }}
-        >
+          transform={`rotate(-90 ${cx} ${cy})`}>
           <title>{arc.label}: {arc.value}</title>
         </circle>
       ))}
       <circle cx={cx} cy={cy} r={r - 8} fill="var(--bg-card)" />
-      <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="700" fill="white">
-        {total}
-      </text>
+      <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="700" fill="white">{total}</text>
     </svg>
   );
 }
 
-// ─── Claim stage pipeline bar ─────────────────────────────────
 const CLAIM_STAGES = [
   { stage: "Reported", color: "#9ca3af" },
   { stage: "Documents Pending", color: "#fbbf24" },
@@ -168,16 +107,7 @@ const CLAIM_STAGES = [
   { stage: "Released / Settled", color: "#34d399" },
 ];
 
-// ─── KPI Card ────────────────────────────────────────────────
-function KPICard({
-  icon,
-  label,
-  value,
-  sub,
-  accent,
-  href,
-  alert,
-}: {
+interface KPICardProps {
   icon: React.ReactNode;
   label: string;
   value: string | number;
@@ -185,71 +115,79 @@ function KPICard({
   accent?: string;
   href?: string;
   alert?: "red" | "amber" | "green";
-}) {
+  onClick?: () => void;
+  disabled?: boolean;
+}
+
+function KPICard({ icon, label, value, sub, accent, href, alert, onClick, disabled }: KPICardProps) {
   const alertColors = {
     red: { bg: "rgba(239,68,68,0.08)", border: "rgba(239,68,68,0.3)", pulse: "#ef4444" },
     amber: { bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.3)", pulse: "#fbbf24" },
     green: { bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.3)", pulse: "var(--brand)" },
   };
   const a = alert ? alertColors[alert] : null;
+  const isClickable = (href || onClick) && !disabled;
 
-  const card = (
-    <div
-      style={{
-        backgroundColor: a ? a.bg : "var(--bg-card)",
-        border: `1px solid ${a ? a.border : "var(--border)"}`,
-        borderRadius: "10px",
-        padding: "16px 18px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-        transition: "border-color 0.15s",
-        cursor: href ? "pointer" : "default",
-        position: "relative",
-        overflow: "hidden",
-      }}
-      onMouseEnter={(e) => {
-        if (href) (e.currentTarget as HTMLElement).style.borderColor = accent || "var(--brand)";
-      }}
-      onMouseLeave={(e) => {
-        if (href) (e.currentTarget as HTMLElement).style.borderColor = a ? a.border : "var(--border)";
-      }}
-    >
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: a ? a.bg : "var(--bg-card)",
+    border: `1px solid ${a ? a.border : "var(--border)"}`,
+    borderRadius: "10px",
+    padding: "16px 18px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    cursor: isClickable ? "pointer" : "default",
+    position: "relative",
+    overflow: "hidden",
+    transition: "border-color 0.15s, transform 0.1s",
+    textDecoration: "none",
+  };
+
+  const content = (
+    <>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{
-            width: "32px", height: "32px", borderRadius: "8px",
-            backgroundColor: a ? `${a.pulse}22` : "var(--brand-dim)",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
+          <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: a ? `${a.pulse}22` : "var(--brand-dim)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {icon}
           </div>
-          <p style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", margin: 0 }}>
-            {label}
-          </p>
+          <p style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", margin: 0 }}>{label}</p>
         </div>
-        {href && <ChevronRight size={13} color="var(--text-muted)" />}
+        {isClickable && <ChevronRight size={13} color="var(--text-muted)" />}
       </div>
       <div>
-        <p style={{ fontSize: "26px", fontWeight: 800, color: a ? a.pulse : (accent || "var(--text-primary)"), margin: 0, lineHeight: 1 }}>
-          {value}
-        </p>
+        <p style={{ fontSize: "26px", fontWeight: 800, color: a ? a.pulse : (accent || "var(--text-primary)"), margin: 0, lineHeight: 1 }}>{value}</p>
         {sub && <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "4px 0 0" }}>{sub}</p>}
       </div>
-    </div>
+    </>
   );
+
+  const hoverEnter = (e: React.MouseEvent<HTMLElement>) => {
+    if (isClickable) {
+      (e.currentTarget as HTMLElement).style.borderColor = accent || (a ? a.pulse : "var(--brand)");
+      (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
+    }
+  };
+  const hoverLeave = (e: React.MouseEvent<HTMLElement>) => {
+    if (isClickable) {
+      (e.currentTarget as HTMLElement).style.borderColor = a ? a.border : "var(--border)";
+      (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+    }
+  };
 
   if (href) {
     return (
-      <Link href={href} style={{ textDecoration: "none" }}>
-        {card}
+      <Link href={href} style={cardStyle} onMouseEnter={hoverEnter} onMouseLeave={hoverLeave}>
+        {content}
       </Link>
     );
   }
-  return card;
+  return (
+    <div style={cardStyle} onClick={onClick} onMouseEnter={hoverEnter} onMouseLeave={hoverLeave}>
+      {content}
+    </div>
+  );
 }
 
-// ─── Section header ───────────────────────────────────────────
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
   return (
     <div style={{ marginBottom: "14px" }}>
@@ -259,8 +197,8 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
   );
 }
 
-// ─── Main Dashboard ───────────────────────────────────────────
 export default function DashboardPage() {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -287,7 +225,6 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-        {/* Skeleton loader */}
         {[1, 2].map(row => (
           <div key={row} style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
             {[1, 2, 3, 4].map(i => (
@@ -300,81 +237,74 @@ export default function DashboardPage() {
     );
   }
 
-  if (!data) {
-    return (
-      <div style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)" }}>
-        Failed to load dashboard data.
-      </div>
-    );
-  }
+  if (!data) return <div style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)" }}>Failed to load dashboard data.</div>;
 
-  // Derived data for charts
+  const coverCount = data.coverCount || {};
+  const typeCount = data.typeCount || {};
+  const genderCounts = data.genderCounts || {};
+  const revenueByInsurer = data.revenueByInsurer || {};
+
   const donutCoverData = [
-    { label: "Comprehensive", value: data.coverCount["Comprehensive"] || 0, color: "#10b981" },
-    { label: "TPO", value: data.coverCount["TPO"] || 0, color: "#fbbf24" },
-    { label: "TPFT", value: data.coverCount["TPFT"] || 0, color: "#60a5fa" },
+    { label: "Comprehensive", value: coverCount["Comprehensive"] || 0, color: "#10b981" },
+    { label: "TPO", value: coverCount["TPO"] || 0, color: "#fbbf24" },
+    { label: "TPFT", value: coverCount["TPFT"] || 0, color: "#60a5fa" },
   ];
 
   const donutTypeData = [
-    { label: "Private", value: data.typeCount["Motor - Private"] || 0, color: "#10b981" },
-    { label: "Commercial", value: data.typeCount["Motor - Commercial"] || 0, color: "#a78bfa" },
-    { label: "PSV", value: data.typeCount["Motor - PSV / Matatu"] || 0, color: "#fbbf24" },
-    { label: "Other", value: Object.entries(data.typeCount).filter(([k]) => !k.startsWith("Motor")).reduce((s, [, v]) => s + v, 0), color: "#9ca3af" },
+    { label: "Private", value: typeCount["Motor - Private"] || 0, color: "#10b981" },
+    { label: "Commercial", value: typeCount["Motor - Commercial"] || 0, color: "#a78bfa" },
+    { label: "PSV", value: typeCount["Motor - PSV / Matatu"] || 0, color: "#fbbf24" },
+    { label: "Other", value: Object.entries(typeCount).filter(([k]) => !k.startsWith("Motor")).reduce((s, [, v]) => s + v, 0), color: "#9ca3af" },
   ];
 
   const donutGenderData = [
-    { label: "Male", value: data.genderCounts["Male"] || 0, color: "#60a5fa" },
-    { label: "Female", value: data.genderCounts["Female"] || 0, color: "#f472b6" },
-    { label: "Other", value: (data.genderCounts["Other"] || 0) + (data.genderCounts["Unknown"] || 0), color: "#9ca3af" },
+    { label: "Male", value: genderCounts["Male"] || 0, color: "#60a5fa" },
+    { label: "Female", value: genderCounts["Female"] || 0, color: "#f472b6" },
+    { label: "Other", value: (genderCounts["Other"] || 0) + (genderCounts["Unknown"] || 0), color: "#9ca3af" },
   ];
 
-  const revenueByInsurerArr = Object.entries(data.revenueByInsurer)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
-
+  const revenueByInsurerArr = Object.entries(revenueByInsurer).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const maxRevenue = Math.max(...revenueByInsurerArr.map(([, v]) => v), 1);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
 
-      {/* Top bar: date + refresh */}
+      {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
-            {new Date().toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-          </p>
-        </div>
+        <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
+          {new Date().toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        </p>
         <button
           onClick={() => load(true)}
           disabled={refreshing}
-          style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-muted)", fontSize: "12px", fontWeight: 600, cursor: "pointer", transition: "color 0.1s" }}
+          style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-muted)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-primary)")}
           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-muted)")}
         >
           <RefreshCw size={12} style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }} />
           {refreshing ? "Refreshing..." : lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}` : "Refresh"}
         </button>
-        <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
       </div>
 
-      {/* ── ROW 1: Policy Alerts ──────────────────────────────── */}
+      {/* ── ROW 1: Policy Alerts ── */}
       <div>
-        <SectionHeader title="Policy Alerts" sub="Renewals requiring attention" />
+        <SectionHeader title="Policy Alerts" sub="Click any card to view filtered policies" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
           <KPICard
             icon={<FileText size={16} color="var(--brand)" />}
             label="Active Policies"
             value={data.totalActive}
             sub={`${data.totalPolicies} total`}
-            href="/policies"
+            href="/policies?filter=active"
             accent="var(--brand)"
           />
           <KPICard
             icon={<Calendar size={16} color="#fb923c" />}
             label="Expiring in 30 days"
             value={data.expiringIn30}
-            sub="Renewal required"
-            href="/policies"
+            sub={data.expiringIn30 > 0 ? "Click to view" : "All clear"}
+            href="/policies?filter=expiring30"
             alert={data.expiringIn30 > 0 ? "amber" : undefined}
             accent="#fb923c"
           />
@@ -382,8 +312,8 @@ export default function DashboardPage() {
             icon={<AlertCircle size={16} color="#fbbf24" />}
             label="Expiring in 7 days"
             value={data.expiringIn7}
-            sub="Urgent renewals"
-            href="/policies"
+            sub={data.expiringIn7 > 0 ? "Urgent — click to view" : "All clear"}
+            href="/policies?filter=expiring7"
             alert={data.expiringIn7 > 0 ? "amber" : undefined}
             accent="#fbbf24"
           />
@@ -391,23 +321,24 @@ export default function DashboardPage() {
             icon={<AlertTriangle size={16} color="#f87171" />}
             label="Expired Today"
             value={data.expiredToday}
-            sub="Action required"
-            href="/policies"
+            sub={data.expiredToday > 0 ? "Action required" : "All clear"}
+            href="/policies?filter=expired"
             alert={data.expiredToday > 0 ? "red" : undefined}
             accent="#f87171"
           />
         </div>
       </div>
 
-      {/* ── ROW 2: Finance ───────────────────────────────────── */}
+      {/* ── ROW 2: Finance Summary ── */}
       <div>
-        <SectionHeader title="Finance Summary" />
+        <SectionHeader title="Finance Summary" sub="Click cards to view related policies" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
           <KPICard
             icon={<TrendingUp size={16} color="var(--brand)" />}
             label="Revenue This Month"
             value={fmtShort(data.revenueThisMonth)}
             sub="Collected"
+            href="/policies?filter=active"
             accent="var(--brand)"
           />
           <KPICard
@@ -415,6 +346,7 @@ export default function DashboardPage() {
             label="Revenue YTD"
             value={fmtShort(data.revenueYTD)}
             sub={`${new Date().getFullYear()} total`}
+            href="/policies?filter=active"
             accent="#a78bfa"
           />
           <KPICard
@@ -422,28 +354,32 @@ export default function DashboardPage() {
             label="Commission (Month)"
             value={fmtShort(data.commissionThisMonth)}
             sub="Agency earnings"
+            href="/policies?filter=active"
             accent="#60a5fa"
           />
           <KPICard
             icon={<Clock size={16} color="#f87171" />}
             label="Overdue Payments"
             value={fmtShort(data.overdueTotal)}
-            sub={`KES ${data.dueIn7Total.toLocaleString("en-KE", { maximumFractionDigits: 0 })} due in 7d`}
+            sub={`KES ${(data.dueIn7Total || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })} due in 7d`}
+            href="/policies?filter=overdue"
             alert={data.overdueTotal > 0 ? "red" : undefined}
             accent="#f87171"
           />
         </div>
       </div>
 
-      {/* ── ROW 3: Claims + Customer stats ───────────────────── */}
+      {/* ── ROW 3: Claims + Stats ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
 
-        {/* Claims pipeline */}
+        {/* Claims pipeline — each stage bar is clickable */}
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "18px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
             <div>
               <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Claims Pipeline</p>
-              <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0" }}>{data.totalActiveClaims} active claims</p>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0" }}>
+                {data.totalActiveClaims} active · click a stage to filter
+              </p>
             </div>
             <Link href="/claims" style={{ fontSize: "12px", color: "var(--brand)", textDecoration: "none", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
               View all <ChevronRight size={12} />
@@ -456,7 +392,13 @@ export default function DashboardPage() {
               const total = data.totalActiveClaims || 1;
               const pct = Math.round((count / total) * 100);
               return (
-                <div key={stage}>
+                <Link
+                  key={stage}
+                  href={`/claims?filter=stage&value=${encodeURIComponent(stage)}`}
+                  style={{ textDecoration: "none", display: "block", padding: "4px 6px", borderRadius: "6px", transition: "background-color 0.1s" }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
+                >
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                     <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{stage}</span>
                     <span style={{ fontSize: "12px", fontWeight: 700, color: count > 0 ? color : "var(--text-muted)" }}>{count}</span>
@@ -464,50 +406,66 @@ export default function DashboardPage() {
                   <div style={{ height: "5px", backgroundColor: "var(--bg-app)", borderRadius: "3px", overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${pct}%`, backgroundColor: color, borderRadius: "3px", transition: "width 0.6s ease" }} />
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
 
           {data.claimsNearing30 > 0 && (
-            <div style={{ marginTop: "14px", padding: "10px 12px", backgroundColor: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <Link
+              href="/claims?filter=nearing30"
+              style={{ marginTop: "14px", padding: "10px 12px", backgroundColor: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "8px", display: "flex", alignItems: "center", gap: "8px", textDecoration: "none", transition: "background-color 0.1s" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "rgba(245,158,11,0.15)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "rgba(245,158,11,0.08)")}
+            >
               <AlertTriangle size={13} color="#fbbf24" />
               <p style={{ fontSize: "12px", color: "#fbbf24", margin: 0, fontWeight: 600 }}>
-                {data.claimsNearing30} claim{data.claimsNearing30 > 1 ? "s" : ""} approaching 30-day mark
+                {data.claimsNearing30} claim{data.claimsNearing30 > 1 ? "s" : ""} approaching 30-day mark — click to review
               </p>
-            </div>
+            </Link>
           )}
         </div>
 
-        {/* Quick stats */}
+        {/* Quick stats column */}
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <KPICard
             icon={<Users size={16} color="var(--brand)" />}
             label="Total Customers"
             value={data.totalCustomers}
-            sub="All time"
+            sub="All time — click to view"
             href="/customers"
             accent="var(--brand)"
           />
           <KPICard
             icon={<Activity size={16} color="#a78bfa" />}
-            label="Total Claims"
+            label="Active Claims"
             value={data.totalActiveClaims}
-            sub="Active claims"
-            href="/claims"
+            sub="Click to view all active claims"
+            href="/claims?filter=active"
             accent="#a78bfa"
           />
+
+          {/* Cover type donut — segments clickable */}
           <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "14px 16px" }}>
-            <p style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginBottom: "10px" }}>Cover Type Split</p>
+            <p style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginBottom: "10px" }}>
+              Cover Type Split — click to filter
+            </p>
             <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
               <DonutChart segments={donutCoverData} size={72} />
-              <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "5px", flex: 1 }}>
                 {donutCoverData.map(d => (
-                  <div key={d.label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Link
+                    key={d.label}
+                    href={`/policies?filter=coverType&value=${encodeURIComponent(d.label)}`}
+                    style={{ display: "flex", alignItems: "center", gap: "6px", textDecoration: "none", padding: "3px 6px", borderRadius: "4px", transition: "background-color 0.1s" }}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
+                  >
                     <div style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: d.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{d.label}</span>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", marginLeft: "auto" }}>{d.value}</span>
-                  </div>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)", flex: 1 }}>{d.label}</span>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>{d.value}</span>
+                    <ChevronRight size={10} color="var(--text-muted)" />
+                  </Link>
                 ))}
               </div>
             </div>
@@ -515,31 +473,31 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── ROW 4: Monthly volume chart ───────────────────────── */}
+      {/* ── ROW 4: Monthly volume chart ── */}
       <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "18px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
           <div>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Monthly Policy Volume</p>
             <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0" }}>New policies written — last 12 months</p>
           </div>
-          <span style={{ fontSize: "18px", fontWeight: 800, color: "var(--brand)" }}>
-            {data.monthlyVolume.slice(-1)[0]?.count ?? 0}
-            <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 400, marginLeft: "4px" }}>this month</span>
-          </span>
+          <Link href="/policies?filter=active" style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "var(--brand)", textDecoration: "none", fontWeight: 600 }}>
+            <span style={{ fontSize: "18px", fontWeight: 800 }}>{data.monthlyVolume.slice(-1)[0]?.count ?? 0}</span>
+            <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>this month</span>
+            <ChevronRight size={12} />
+          </Link>
         </div>
-        <BarChart
-          data={data.monthlyVolume.map(m => ({ label: m.month, value: m.count }))}
-          color="var(--brand)"
-          height={100}
-        />
+        <BarChart data={data.monthlyVolume.map(m => ({ label: m.month, value: m.count }))} color="var(--brand)" height={100} />
       </div>
 
-      {/* ── ROW 5: Demographics + Insurer Revenue ─────────────── */}
+      {/* ── ROW 5: Demographics + Insurer Revenue ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
 
         {/* Gender */}
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "18px" }}>
-          <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "14px" }}>Customers by Gender</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Customers by Gender</p>
+            <Link href="/customers" style={{ fontSize: "11px", color: "var(--brand)", textDecoration: "none", fontWeight: 600 }}>View all →</Link>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
             <DonutChart segments={donutGenderData} size={96} />
             <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "5px" }}>
@@ -554,43 +512,65 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Policy type */}
+        {/* Policy type — each row clickable */}
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "18px" }}>
-          <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "14px" }}>Policies by Type</p>
+          <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "14px" }}>
+            Policies by Type — <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 400 }}>click to filter</span>
+          </p>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
             <DonutChart segments={donutTypeData} size={96} />
             <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "5px" }}>
-              {donutTypeData.map(d => (
-                <div key={d.label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {[
+                { label: "Private", type: "Motor - Private", color: "#10b981" },
+                { label: "Commercial", type: "Motor - Commercial", color: "#a78bfa" },
+                { label: "PSV", type: "Motor - PSV / Matatu", color: "#fbbf24" },
+              ].map(d => (
+                <Link
+                  key={d.label}
+                  href={`/policies?filter=type&value=${encodeURIComponent(d.type)}`}
+                  style={{ display: "flex", alignItems: "center", gap: "6px", textDecoration: "none", padding: "3px 6px", borderRadius: "4px", transition: "background-color 0.1s" }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
+                >
                   <div style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: d.color, flexShrink: 0 }} />
                   <span style={{ fontSize: "12px", color: "var(--text-secondary)", flex: 1 }}>{d.label}</span>
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>{d.value}</span>
-                </div>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>{typeCount[d.type] || 0}</span>
+                  <ChevronRight size={10} color="var(--text-muted)" />
+                </Link>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Top Counties */}
+        {/* Top Counties — clickable */}
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "18px" }}>
-          <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "14px" }}>Top Counties</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Top Counties</p>
+            <Link href="/customers" style={{ fontSize: "11px", color: "var(--brand)", textDecoration: "none", fontWeight: 600 }}>All customers →</Link>
+          </div>
           {data.topCounties.length === 0 ? (
             <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>No county data yet.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
               {data.topCounties.map((c, i) => {
-                const max = data.topCounties[0].count || 1;
-                const pct = (c.count / max) * 100;
+                const maxCount = data.topCounties[0].count || 1;
+                const pct = (c.count / maxCount) * 100;
                 return (
-                  <div key={c.county}>
+                  <Link
+                    key={c.county}
+                    href={`/customers?search=${encodeURIComponent(c.county)}`}
+                    style={{ textDecoration: "none", display: "block", padding: "2px 4px", borderRadius: "4px", transition: "background-color 0.1s" }}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
+                  >
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
                       <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{c.county}</span>
                       <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>{c.count}</span>
                     </div>
                     <div style={{ height: "4px", backgroundColor: "var(--bg-app)", borderRadius: "2px" }}>
-                      <div style={{ height: "100%", width: `${pct}%`, backgroundColor: i === 0 ? "var(--brand)" : "rgba(16,185,129,0.4)", borderRadius: "2px", transition: "width 0.6s ease" }} />
+                      <div style={{ height: "100%", width: `${pct}%`, backgroundColor: i === 0 ? "var(--brand)" : "rgba(16,185,129,0.4)", borderRadius: "2px" }} />
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -598,32 +578,36 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── ROW 6: Revenue by Insurer + Recent Activity ───────── */}
+      {/* ── ROW 6: Revenue by Insurer + Recent Activity ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
 
-        {/* Revenue by insurer */}
+        {/* Revenue by insurer — each bar clickable */}
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "18px" }}>
-          <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>Revenue by Insurer</p>
+          <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "4px" }}>Revenue by Insurer</p>
+          <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "16px" }}>Click an insurer to view its policies</p>
           {revenueByInsurerArr.length === 0 ? (
             <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>No revenue data yet.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {revenueByInsurerArr.map(([name, rev], i) => (
-                <div key={name}>
+                <Link
+                  key={name}
+                  href={`/policies?filter=insurer&value=${encodeURIComponent(name)}`}
+                  style={{ textDecoration: "none", display: "block", padding: "4px 6px", borderRadius: "6px", transition: "background-color 0.1s" }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
+                >
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                     <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{name}</span>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>{fmtShort(rev)}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>{fmtShort(rev)}</span>
+                      <ChevronRight size={10} color="var(--text-muted)" />
+                    </div>
                   </div>
                   <div style={{ height: "5px", backgroundColor: "var(--bg-app)", borderRadius: "3px" }}>
-                    <div style={{
-                      height: "100%",
-                      width: `${(rev / maxRevenue) * 100}%`,
-                      backgroundColor: ["#10b981", "#a78bfa", "#60a5fa", "#fbbf24", "#fb923c", "#f87171"][i] || "var(--brand)",
-                      borderRadius: "3px",
-                      transition: "width 0.6s ease",
-                    }} />
+                    <div style={{ height: "100%", width: `${(rev / maxRevenue) * 100}%`, backgroundColor: ["#10b981", "#a78bfa", "#60a5fa", "#fbbf24", "#fb923c", "#f87171"][i] || "var(--brand)", borderRadius: "3px" }} />
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -640,20 +624,14 @@ export default function DashboardPage() {
           {data.recentPolicies.length === 0 ? (
             <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>No policies yet.</p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
               {data.recentPolicies.map((p, i) => (
                 <Link
                   key={p.id}
                   href={`/policies/${p.id}`}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "10px",
-                    padding: "10px 0",
-                    borderBottom: i < data.recentPolicies.length - 1 ? "1px solid var(--border)" : "none",
-                    textDecoration: "none",
-                    transition: "opacity 0.1s",
-                  }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.opacity = "0.75")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.opacity = "1")}
+                  style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 6px", borderBottom: i < data.recentPolicies.length - 1 ? "1px solid var(--border)" : "none", textDecoration: "none", borderRadius: "6px", transition: "background-color 0.1s" }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
                 >
                   <div style={{ width: "30px", height: "30px", borderRadius: "8px", backgroundColor: "var(--brand-dim)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <FileText size={13} color="var(--brand)" />
@@ -662,9 +640,7 @@ export default function DashboardPage() {
                     <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {p.customerName || "Unknown"}
                     </p>
-                    <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>
-                      {p.insuranceType.replace("Motor - ", "")}
-                    </p>
+                    <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>{p.insuranceType.replace("Motor - ", "")}</p>
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
                     <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--brand)", margin: 0 }}>
@@ -680,7 +656,6 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
-
     </div>
   );
 }
