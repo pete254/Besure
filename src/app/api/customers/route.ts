@@ -76,7 +76,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const parsed = createCustomerSchema.safeParse(body);
+    
+    // Convert empty strings to null for optional fields
+    const cleanedBody = {
+      ...body,
+      email: body.email || null,
+      gender: body.gender || null,
+      county: body.county || null,
+      companyEmail: body.companyEmail || null,
+    };
+    
+    const parsed = createCustomerSchema.safeParse(cleanedBody);
 
     if (!parsed.success) {
       return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });

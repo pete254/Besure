@@ -406,9 +406,9 @@ export default function EditCustomerPage() {
                 <label style={labelStyle}>Gender</label>
                 <select name="gender" value={form.gender} onChange={handleChange} style={inputStyle} onFocus={focusStyle} onBlur={blurStyle}>
                   <option value="">Select gender</option>
-                  <option>Male</option>
-                  <option>Female</option>
-                  <option>Other</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
             )}

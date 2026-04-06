@@ -232,7 +232,9 @@ export default function NewCustomerPage() {
                   onFocus={(e) => { (e.target as HTMLSelectElement).style.borderColor = "var(--brand)"; }}
                   onBlur={(e) => { (e.target as HTMLSelectElement).style.borderColor = "var(--border)"; }}>
                   <option value="">Select gender</option>
-                  <option>Male</option><option>Female</option><option>Other</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
             )}

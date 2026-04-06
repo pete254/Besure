@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Car, CreditCard, FileText, Calendar, User, Building2, CheckCircle2, Clock } from "lucide-react";
+import RiskNoteButton from "@/components/RiskNoteButton";
 
 interface Policy {
   id: string;
@@ -136,11 +137,12 @@ export default function PolicyDetailPage() {
           </div>
         </div>
 
-        <div style={{ textAlign: "right" }}>
+        <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
           <p style={{ fontSize: "20px", fontWeight: 700, color: "var(--brand)", margin: 0 }}>{formatKES(policy.grandTotal)}</p>
-          <p style={{ fontSize: "12px", color: expiryColor, margin: "3px 0 0", fontWeight: 600 }}>
+          <p style={{ fontSize: "12px", color: expiryColor, margin: 0, fontWeight: 600 }}>
             {daysLeft < 0 ? "Expired" : daysLeft === 0 ? "Expires today" : `${daysLeft} days left`}
           </p>
+          <RiskNoteButton policyId={policy.id} policyNumber={policy.policyNumber} />
         </div>
       </div>
 
