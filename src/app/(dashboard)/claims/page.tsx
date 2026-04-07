@@ -9,27 +9,23 @@ import { Plus, Search, ChevronRight, AlertTriangle, X } from "lucide-react";
 
 interface ClaimRow {
   claim: {
-    id: string;
-    claimNumber: string;
-    dateOfLoss: string;
-    dateReported: string;
-    natureOfLoss: string;
-    stage: string;
-    repairEstimate?: string | null;
-    approvedAmount?: string | null;
+    id: string; claimNumber: string; dateOfLoss: string;
+    dateReported: string; natureOfLoss: string; stage: string;
+    repairEstimate?: string | null; approvedAmount?: string | null;
   };
   policy: { id: string; policyNumber?: string | null; insuranceType: string; } | null;
   customer: { id: string; firstName: string; lastName: string; companyName?: string | null; customerType: string; } | null;
   vehicle: { make: string; model: string; regNo: string; } | null;
 }
 
+// ── Executed removed; Approved + Declined added ──
 const STAGE_COLORS: Record<string, { bg: string; color: string }> = {
   "Reported":            { bg: "rgba(107,114,128,0.15)", color: "#9ca3af" },
   "Documents Pending":   { bg: "rgba(245,158,11,0.15)",  color: "#fbbf24" },
   "Fully Documented":    { bg: "rgba(59,130,246,0.15)",  color: "#60a5fa" },
   "Assessed":            { bg: "rgba(139,92,246,0.15)",  color: "#a78bfa" },
-  "Executed":            { bg: "rgba(249,115,22,0.15)",  color: "#fb923c" },
   "Approved":            { bg: "rgba(16,185,129,0.15)",  color: "#10b981" },
+  "Declined":            { bg: "rgba(239,68,68,0.15)",   color: "#f87171" },
   "Released / Settled":  { bg: "rgba(16,185,129,0.2)",   color: "#34d399" },
 };
 
@@ -57,13 +53,9 @@ export default function ClaimsPage() {
 
   useEffect(() => { fetchClaims(); }, [fetchClaims]);
 
-  // Apply URL filter to pre-set stage filter
   useEffect(() => {
-    if (filterParam === "stage" && filterValue) {
-      setStageFilter(filterValue);
-    } else if (filterParam === "nearing30") {
-      setStageFilter("All"); // handled below
-    }
+    if (filterParam === "stage" && filterValue) setStageFilter(filterValue);
+    else if (filterParam === "nearing30") setStageFilter("All");
   }, [filterParam, filterValue]);
 
   const thirtyDaysAgoStr = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
@@ -74,7 +66,8 @@ export default function ClaimsPage() {
         ? r.customer.companyName || ""
         : `${r.customer.firstName} ${r.customer.lastName}`
       : "";
-    const matchesSearch = !search ||
+    const matchesSearch =
+      !search ||
       name.toLowerCase().includes(search.toLowerCase()) ||
       r.claim.claimNumber.toLowerCase().includes(search.toLowerCase()) ||
       (r.vehicle?.regNo || "").toLowerCase().includes(search.toLowerCase());
@@ -82,25 +75,23 @@ export default function ClaimsPage() {
     return matchesSearch && matchesStage;
   });
 
-  // Apply URL-based filters
   if (filterParam === "nearing30") {
-    filtered = filtered.filter(r =>
-      r.claim.dateReported <= thirtyDaysAgoStr &&
-      r.claim.stage !== "Released / Settled"
+    filtered = filtered.filter(
+      (r) => r.claim.dateReported <= thirtyDaysAgoStr && r.claim.stage !== "Released / Settled"
     );
   } else if (filterParam === "active") {
-    filtered = filtered.filter(r => r.claim.stage !== "Released / Settled");
+    filtered = filtered.filter(
+      (r) => r.claim.stage !== "Released / Settled" && r.claim.stage !== "Declined"
+    );
   }
 
   const stages = ["All", ...Object.keys(STAGE_COLORS)];
 
-  const activeFilter = filterParam === "nearing30"
-    ? "Approaching 30 days"
-    : filterParam === "active"
-    ? "Active claims"
-    : filterParam === "stage" && filterValue
-    ? `Stage: ${filterValue}`
-    : null;
+  const activeFilter =
+    filterParam === "nearing30" ? "Approaching 30 days" :
+    filterParam === "active"    ? "Active claims" :
+    filterParam === "stage" && filterValue ? `Stage: ${filterValue}` :
+    null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -110,7 +101,10 @@ export default function ClaimsPage() {
         <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
           {loading ? "Loading..." : `${filtered.length} of ${rows.length} claim${rows.length !== 1 ? "s" : ""}`}
         </p>
-        <Link href="/claims/new" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", backgroundColor: "var(--brand)", color: "#000", borderRadius: "8px", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
+        <Link
+          href="/claims/new"
+          style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", backgroundColor: "var(--brand)", color: "#000", borderRadius: "8px", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}
+        >
           <Plus size={15} strokeWidth={2.5} /> New Claim
         </Link>
       </div>
@@ -128,7 +122,7 @@ export default function ClaimsPage() {
         </div>
       )}
 
-      {/* Search + stage filter */}
+      {/* Search + stage dropdown */}
       <div style={{ display: "flex", gap: "10px" }}>
         <div style={{ position: "relative", flex: 1 }}>
           <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
@@ -138,7 +132,7 @@ export default function ClaimsPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ width: "100%", padding: "9px 12px 9px 36px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
             onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
-            onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+            onBlur={(e)  => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
           />
         </div>
         <select
@@ -150,7 +144,7 @@ export default function ClaimsPage() {
         </select>
       </div>
 
-      {/* Stage pipeline summary - clickable */}
+      {/* Stage pipeline summary cards */}
       <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
         {Object.entries(STAGE_COLORS).map(([stage, colors]) => {
           const count = rows.filter(r => r.claim.stage === stage).length;
@@ -162,7 +156,12 @@ export default function ClaimsPage() {
                 if (isActive) { setStageFilter("All"); router.push("/claims"); }
                 else { setStageFilter(stage); router.push(`/claims?filter=stage&value=${encodeURIComponent(stage)}`); }
               }}
-              style={{ flexShrink: 0, padding: "8px 12px", borderRadius: "8px", cursor: "pointer", backgroundColor: isActive ? colors.bg : "var(--bg-card)", border: `1px solid ${isActive ? colors.color : "var(--border)"}`, transition: "all 0.1s" }}
+              style={{
+                flexShrink: 0, padding: "8px 12px", borderRadius: "8px", cursor: "pointer",
+                backgroundColor: isActive ? colors.bg : "var(--bg-card)",
+                border: `1px solid ${isActive ? colors.color : "var(--border)"}`,
+                transition: "all 0.1s",
+              }}
             >
               <p style={{ fontSize: "18px", fontWeight: 700, color: colors.color, margin: 0, lineHeight: 1 }}>{count}</p>
               <p style={{ fontSize: "10px", color: "var(--text-muted)", margin: "2px 0 0", whiteSpace: "nowrap" }}>{stage}</p>
@@ -196,9 +195,10 @@ export default function ClaimsPage() {
               ? r.customer.customerType === "Company" ? r.customer.companyName : `${r.customer.firstName} ${r.customer.lastName}`
               : "Unknown";
             const stageStyle = STAGE_COLORS[r.claim.stage] || { bg: "rgba(107,114,128,0.15)", color: "#9ca3af" };
-
             return (
-              <Link key={r.claim.id} href={`/claims/${r.claim.id}`}
+              <Link
+                key={r.claim.id}
+                href={`/claims/${r.claim.id}`}
                 style={{ display: "grid", gridTemplateColumns: "1.5fr 2fr 1fr 1fr 1fr 1fr 32px", padding: "12px 16px", alignItems: "center", textDecoration: "none", borderBottom: "1px solid var(--border)", transition: "background-color 0.1s" }}
                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}

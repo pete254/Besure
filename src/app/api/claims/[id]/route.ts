@@ -2,12 +2,32 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { claims, policies, customers, vehicles, claimDocuments, followupNotes, garages, users } from "@/drizzle/schema";
+import {
+  claims,
+  policies,
+  customers,
+  vehicles,
+  claimDocuments,
+  followupNotes,
+  garages,
+  users,
+} from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 const updateClaimSchema = z.object({
-  stage: z.enum(["Reported", "Documents Pending", "Fully Documented", "Assessed", "Executed", "Approved", "Released / Settled"]).optional(),
+  // Removed "Executed"; added "Approved" and "Declined"
+  stage: z
+    .enum([
+      "Reported",
+      "Documents Pending",
+      "Fully Documented",
+      "Assessed",
+      "Approved",
+      "Declined",
+      "Released / Settled",
+    ])
+    .optional(),
   garageId: z.string().uuid().optional().nullable(),
   garageFreeText: z.string().optional().nullable(),
   repairEstimate: z.string().optional().nullable(),
@@ -24,7 +44,6 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // Fetch claim with all relations
     const [claimData] = await db
       .select({
         claim: claims,
@@ -46,24 +65,18 @@ export async function GET(
       return NextResponse.json({ error: "Claim not found" }, { status: 404 });
     }
 
-    // Fetch documents
     const docs = await db
       .select()
       .from(claimDocuments)
       .where(eq(claimDocuments.claimId, id));
 
-    // Fetch followup notes
     const notesData = await db
-      .select({
-        note: followupNotes,
-        staff: users,
-      })
+      .select({ note: followupNotes, staff: users })
       .from(followupNotes)
       .leftJoin(users, eq(followupNotes.staffId, users.id))
       .where(eq(followupNotes.claimId, id));
 
-    // Format notes to match frontend expectations
-    const formattedNotes = notesData.map(n => ({
+    const formattedNotes = notesData.map((n) => ({
       id: n.note.id,
       notes: n.note.notes,
       channel: n.note.channel || null,
@@ -83,7 +96,10 @@ export async function GET(
     });
   } catch (error) {
     console.error("GET /api/claims/[id] error:", error);
-    return NextResponse.json({ error: "Failed to fetch claim" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch claim" },
+      { status: 500 }
+    );
   }
 }
 
@@ -105,19 +121,24 @@ export async function PUT(
     }
 
     const data = parsed.data;
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
-    // Build update object
-    const updateData: Record<string, any> = {
-      updatedAt: new Date(),
-    };
-
-    if (data.stage) updateData.stage = data.stage;
+    if (data.stage !== undefined) updateData.stage = data.stage;
     if (data.garageId !== undefined) updateData.garageId = data.garageId;
-    if (data.garageFreeText !== undefined) updateData.garageFreeText = data.garageFreeText;
-    if (data.repairEstimate !== undefined) updateData.repairEstimate = data.repairEstimate ? parseFloat(data.repairEstimate) : null;
-    if (data.approvedAmount !== undefined) updateData.approvedAmount = data.approvedAmount ? parseFloat(data.approvedAmount) : null;
-    if (data.settlementDate !== undefined) updateData.settlementDate = data.settlementDate;
-    if (data.settlementMethod !== undefined) updateData.settlementMethod = data.settlementMethod;
+    if (data.garageFreeText !== undefined)
+      updateData.garageFreeText = data.garageFreeText;
+    if (data.repairEstimate !== undefined)
+      updateData.repairEstimate = data.repairEstimate
+        ? parseFloat(data.repairEstimate)
+        : null;
+    if (data.approvedAmount !== undefined)
+      updateData.approvedAmount = data.approvedAmount
+        ? parseFloat(data.approvedAmount)
+        : null;
+    if (data.settlementDate !== undefined)
+      updateData.settlementDate = data.settlementDate;
+    if (data.settlementMethod !== undefined)
+      updateData.settlementMethod = data.settlementMethod;
 
     const [updated] = await db
       .update(claims)
@@ -132,6 +153,9 @@ export async function PUT(
     return NextResponse.json({ claim: updated });
   } catch (error) {
     console.error("PUT /api/claims/[id] error:", error);
-    return NextResponse.json({ error: "Failed to update claim" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update claim" },
+      { status: 500 }
+    );
   }
 }

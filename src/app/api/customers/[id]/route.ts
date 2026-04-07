@@ -39,12 +39,19 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
-    if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, id));
+    if (!customer)
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     return NextResponse.json({ customer });
   } catch (error) {
     console.error("GET /api/customers/[id] error:", error);
-    return NextResponse.json({ error: "Failed to fetch customer" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch customer" },
+      { status: 500 }
+    );
   }
 }
 
@@ -56,19 +63,46 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await req.json();
-    const parsed = updateCustomerSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
 
-    const [updated] = await db.update(customers)
-      .set({ ...parsed.data, updatedAt: new Date() })
+    // Strip gender for companies before validation
+    const cleanedBody = {
+      ...body,
+      gender:
+        body.customerType === "Company" ? null : body.gender || null,
+    };
+
+    const parsed = updateCustomerSchema.safeParse(cleanedBody);
+    if (!parsed.success)
+      return NextResponse.json(
+        { error: "Validation failed", issues: parsed.error.issues },
+        { status: 400 }
+      );
+
+    const updateData = {
+      ...parsed.data,
+      // Ensure gender is always null for companies even if the record existed before the fix
+      gender:
+        (parsed.data.customerType ?? body.customerType) === "Company"
+          ? null
+          : parsed.data.gender ?? null,
+      updatedAt: new Date(),
+    };
+
+    const [updated] = await db
+      .update(customers)
+      .set(updateData)
       .where(eq(customers.id, id))
       .returning();
 
-    if (!updated) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    if (!updated)
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     return NextResponse.json({ customer: updated });
   } catch (error) {
     console.error("PUT /api/customers/[id] error:", error);
-    return NextResponse.json({ error: "Failed to update customer" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update customer" },
+      { status: 500 }
+    );
   }
 }
 
@@ -79,11 +113,18 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const [deleted] = await db.delete(customers).where(eq(customers.id, id)).returning();
-    if (!deleted) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    const [deleted] = await db
+      .delete(customers)
+      .where(eq(customers.id, id))
+      .returning();
+    if (!deleted)
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("DELETE /api/customers/[id] error:", error);
-    return NextResponse.json({ error: "Failed to delete customer" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to delete customer" },
+      { status: 500 }
+    );
   }
 }

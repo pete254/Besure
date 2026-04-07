@@ -67,7 +67,7 @@ export const followupChannelEnum = pgEnum("followup_channel", [
 
 export const claimStageEnum = pgEnum("claim_stage", [
   "Reported", "Documents Pending", "Fully Documented",
-  "Assessed", "Executed", "Approved", "Released / Settled",
+  "Assessed", "Approved", "Released / Settled", "Declined",
 ]);
 
 export const natureOfLossEnum = pgEnum("nature_of_loss", [
