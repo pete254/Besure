@@ -386,10 +386,13 @@ export default function DashboardPage() {
       </div>
     );
 
-  const coverCount = data.coverCount || {};
-  const typeCount = data.typeCount || {};
-  const genderCounts = data.genderCounts || {};
-  const revenueByInsurer = data.revenueByInsurer || {};
+  // TypeScript type guard - data is guaranteed to be non-null here
+  const safeData: DashboardData = data;
+
+  const coverCount = safeData.coverCount || {};
+  const typeCount = safeData.typeCount || {};
+  const genderCounts = safeData.genderCounts || {};
+  const revenueByInsurer = safeData.revenueByInsurer || {};
 
   const donutCoverData = [
     { label: "Comprehensive", value: coverCount["Comprehensive"] || 0, color: "#10b981" },
@@ -485,36 +488,36 @@ export default function DashboardPage() {
           <KPICard
             icon={<FileText size={16} color="var(--brand)" />}
             label="Active Policies"
-            value={data.totalActive}
-            sub={`${data.totalPolicies} total`}
+            value={safeData.totalActive}
+            sub={`${safeData.totalPolicies} total`}
             href="/policies?filter=active"
             accent="var(--brand)"
           />
           <KPICard
             icon={<Calendar size={16} color="#fb923c" />}
             label="Expiring in 30 days"
-            value={data.expiringIn30}
-            sub={data.expiringIn30 > 0 ? "Click to view" : "All clear"}
+            value={safeData.expiringIn30}
+            sub={safeData.expiringIn30 > 0 ? "Click to view" : "All clear"}
             href="/policies?filter=expiring30"
-            alert={data.expiringIn30 > 0 ? "amber" : undefined}
+            alert={safeData.expiringIn30 > 0 ? "amber" : undefined}
             accent="#fb923c"
           />
           <KPICard
             icon={<AlertCircle size={16} color="#fbbf24" />}
             label="Expiring in 7 days"
-            value={data.expiringIn7}
-            sub={data.expiringIn7 > 0 ? "Urgent — click to view" : "All clear"}
+            value={safeData.expiringIn7}
+            sub={safeData.expiringIn7 > 0 ? "Urgent — click to view" : "All clear"}
             href="/policies?filter=expiring7"
-            alert={data.expiringIn7 > 0 ? "amber" : undefined}
+            alert={safeData.expiringIn7 > 0 ? "amber" : undefined}
             accent="#fbbf24"
           />
           <KPICard
             icon={<AlertTriangle size={16} color="#f87171" />}
             label="Expired Today"
-            value={data.expiredToday}
-            sub={data.expiredToday > 0 ? "Action required" : "All clear"}
+            value={safeData.expiredToday}
+            sub={safeData.expiredToday > 0 ? "Action required" : "All clear"}
             href="/policies?filter=expired"
-            alert={data.expiredToday > 0 ? "red" : undefined}
+            alert={safeData.expiredToday > 0 ? "red" : undefined}
             accent="#f87171"
           />
         </div>
@@ -527,7 +530,7 @@ export default function DashboardPage() {
           <KPICard
             icon={<TrendingUp size={16} color="var(--brand)" />}
             label="Revenue This Month"
-            value={fmtShort(data.revenueThisMonth)}
+            value={fmtShort(safeData.revenueThisMonth)}
             sub="Collected"
             href="/policies?filter=active"
             accent="var(--brand)"
@@ -535,7 +538,7 @@ export default function DashboardPage() {
           <KPICard
             icon={<DollarSign size={16} color="#a78bfa" />}
             label="Revenue YTD"
-            value={fmtShort(data.revenueYTD)}
+            value={fmtShort(safeData.revenueYTD)}
             sub={`${new Date().getFullYear()} total`}
             href="/policies?filter=active"
             accent="#a78bfa"
@@ -543,7 +546,7 @@ export default function DashboardPage() {
           <KPICard
             icon={<Shield size={16} color="#60a5fa" />}
             label="Commission (Month)"
-            value={fmtShort(data.commissionThisMonth)}
+            value={fmtShort(safeData.commissionThisMonth)}
             sub="Agency earnings"
             href="/policies?filter=active"
             accent="#60a5fa"
@@ -551,12 +554,12 @@ export default function DashboardPage() {
           <KPICard
             icon={<Clock size={16} color="#f87171" />}
             label="Overdue Payments"
-            value={fmtShort(data.overdueTotal)}
-            sub={`KES ${(data.dueIn7Total || 0).toLocaleString("en-KE", {
+            value={fmtShort(safeData.overdueTotal)}
+            sub={`KES ${(safeData.dueIn7Total || 0).toLocaleString("en-KE", {
               maximumFractionDigits: 0,
             })} due in 7d`}
             href="/policies?filter=overdue"
-            alert={data.overdueTotal > 0 ? "red" : undefined}
+            alert={safeData.overdueTotal > 0 ? "red" : undefined}
             accent="#f87171"
           />
         </div>
@@ -595,7 +598,7 @@ export default function DashboardPage() {
               <p
                 style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0" }}
               >
-                {data.totalActiveClaims} active · click a stage to filter
+                {safeData.totalActiveClaims} active · click a stage to filter
               </p>
             </div>
             <Link
@@ -616,8 +619,8 @@ export default function DashboardPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {CLAIM_STAGES.map(({ stage, color }) => {
-              const count = data.claimsByStage[stage] || 0;
-              const total = data.totalActiveClaims || 1;
+              const count = data?.claimsByStage?.[stage] || 0;
+              const total = data?.totalActiveClaims || 1;
               const pct = Math.round((count / total) * 100);
               return (
                 <Link
@@ -682,7 +685,7 @@ export default function DashboardPage() {
             })}
           </div>
 
-          {data.claimsNearing30 > 0 && (
+          {safeData.claimsNearing30 > 0 && (
             <Link
               href="/claims?filter=nearing30"
               style={{
@@ -715,8 +718,8 @@ export default function DashboardPage() {
                   fontWeight: 600,
                 }}
               >
-                {data.claimsNearing30} claim
-                {data.claimsNearing30 > 1 ? "s" : ""} approaching 30-day mark —
+                {safeData.claimsNearing30} claim
+                {safeData.claimsNearing30 > 1 ? "s" : ""} approaching 30-day mark —
                 click to review
               </p>
             </Link>
@@ -777,7 +780,7 @@ export default function DashboardPage() {
                     margin: 0,
                   }}
                 >
-                  {data.totalCustomers}
+                  {safeData.totalCustomers}
                 </p>
                 <p
                   style={{
@@ -817,7 +820,7 @@ export default function DashboardPage() {
                       margin: 0,
                     }}
                   >
-                    {data.totalIndividuals ?? 0}
+                    {safeData.totalIndividuals ?? 0}
                   </p>
                 </div>
                 <p
@@ -858,7 +861,7 @@ export default function DashboardPage() {
                       margin: 0,
                     }}
                   >
-                    {data.totalCompanies ?? 0}
+                    {safeData.totalCompanies ?? 0}
                   </p>
                 </div>
                 <p
@@ -877,7 +880,7 @@ export default function DashboardPage() {
           <KPICard
             icon={<Activity size={16} color="#a78bfa" />}
             label="Active Claims"
-            value={data.totalActiveClaims}
+            value={safeData.totalActiveClaims}
             sub="Click to view all active claims"
             href="/claims?filter=active"
             accent="#a78bfa"
@@ -1014,14 +1017,14 @@ export default function DashboardPage() {
             }}
           >
             <span style={{ fontSize: "18px", fontWeight: 800 }}>
-              {data.monthlyVolume.slice(-1)[0]?.count ?? 0}
+              {safeData.monthlyVolume?.slice(-1)[0]?.count ?? 0}
             </span>
             <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>this month</span>
             <ChevronRight size={12} />
           </Link>
         </div>
         <BarChart
-          data={data.monthlyVolume.map((m) => ({ label: m.month, value: m.count }))}
+          data={(safeData.monthlyVolume || []).map((m) => ({ label: m.month, value: m.count }))}
           color="var(--brand)"
           height={100}
         />
@@ -1064,8 +1067,8 @@ export default function DashboardPage() {
                   margin: "2px 0 0",
                 }}
               >
-                {data.totalIndividuals ?? 0} individuals ·{" "}
-                {data.totalCompanies ?? 0} companies
+                {safeData.totalIndividuals ?? 0} individuals ·{" "}
+                {safeData.totalCompanies ?? 0} companies
               </p>
             </div>
             <Link
@@ -1159,7 +1162,7 @@ export default function DashboardPage() {
                     color: "#a78bfa",
                   }}
                 >
-                  {data.totalCompanies ?? 0}
+                  {safeData.totalCompanies ?? 0}
                 </span>
               </div>
             </div>
@@ -1306,14 +1309,14 @@ export default function DashboardPage() {
               All customers →
             </Link>
           </div>
-          {data.topCounties.length === 0 ? (
+          {(safeData.topCounties || []).length === 0 ? (
             <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>
               No county data yet.
             </p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
-              {data.topCounties.map((c, i) => {
-                const maxCount = data.topCounties[0].count || 1;
+              {(safeData.topCounties || []).map((c, i) => {
+                const maxCount = (safeData.topCounties || [])[0]?.count || 1;
                 const pct = (c.count / maxCount) * 100;
                 return (
                   <Link
@@ -1540,13 +1543,13 @@ export default function DashboardPage() {
               All <ChevronRight size={12} />
             </Link>
           </div>
-          {data.recentPolicies.length === 0 ? (
+          {(safeData.recentPolicies || []).length === 0 ? (
             <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>
               No policies yet.
             </p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column" }}>
-              {data.recentPolicies.map((p, i) => (
+              {(safeData.recentPolicies || []).map((p, i) => (
                 <Link
                   key={p.id}
                   href={`/policies/${p.id}`}
@@ -1556,7 +1559,7 @@ export default function DashboardPage() {
                     gap: "10px",
                     padding: "10px 6px",
                     borderBottom:
-                      i < data.recentPolicies.length - 1
+                      i < safeData.recentPolicies.length - 1
                         ? "1px solid var(--border)"
                         : "none",
                     textDecoration: "none",

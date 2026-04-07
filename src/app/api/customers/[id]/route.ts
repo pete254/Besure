@@ -7,11 +7,11 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 const updateCustomerSchema = z.object({
-  firstName: z.string().min(1).optional(),
-  lastName: z.string().min(1).optional(),
+  firstName: z.string().min(1, "First name is required").optional(),
+  lastName: z.string().min(1, "Last name is required").optional(),
   middleName: z.string().optional().nullable(),
-  phone: z.string().min(9).optional(),
-  email: z.string().email().optional().nullable(),
+  phone: z.string().min(9, "Phone number must be at least 9 digits").optional(),
+  email: z.string().regex(/^[^\s@]+@[^\s@]+$/, "Please enter a valid email address").optional().nullable(),
   idNumber: z.string().optional().nullable(),
   idNumberValue: z.string().optional().nullable(),
   kraPin: z.string().optional().nullable(),
@@ -24,7 +24,7 @@ const updateCustomerSchema = z.object({
   companyName: z.string().optional().nullable(),
   town: z.string().optional().nullable(),
   postalAddress: z.string().optional().nullable(),
-  companyEmail: z.string().optional().nullable(),
+  companyEmail: z.string().regex(/^[^\s@]+@[^\s@]+$/, "Please enter a valid company email address").optional().nullable(),
   companyPhone: z.string().optional().nullable(),
   certOfIncorporationValue: z.string().optional().nullable(),
   cr12Value: z.string().optional().nullable(),
@@ -85,6 +85,8 @@ export async function PUT(
         (parsed.data.customerType ?? body.customerType) === "Company"
           ? null
           : parsed.data.gender ?? null,
+      // Convert empty strings to null for date fields
+      dateOfBirth: parsed.data.dateOfBirth || null,
       updatedAt: new Date(),
     };
 

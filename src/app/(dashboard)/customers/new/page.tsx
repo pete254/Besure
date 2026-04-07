@@ -27,6 +27,16 @@ interface Director {
 
 const emptyDirector: Director = { name: "", idNumber: "", idNumberValue: "", kraPin: "", kraPinValue: "" };
 
+// Component for inline error messages
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px", fontWeight: 500 }}>
+      ⚠ {message}
+    </div>
+  );
+}
+
 // Reusable doc field: both file upload AND text value, side-by-side
 function DocField({ 
   label, 
@@ -95,6 +105,7 @@ export default function NewCustomerPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [directors, setDirectors] = useState<Director[]>([]);
 
   const [form, setForm] = useState({
@@ -135,6 +146,7 @@ export default function NewCustomerPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setFieldErrors({});
     setLoading(true);
     try {
       // Extract only the fields needed for the API (exclude file names)
@@ -146,7 +158,23 @@ export default function NewCustomerPage() {
         body: JSON.stringify({ ...formData, directors: directors.length > 0 ? directors : null }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Failed to create customer"); return; }
+      
+      if (!res.ok) {
+        // Handle Zod validation errors with field paths
+        if (data.issues && Array.isArray(data.issues)) {
+          const errors: Record<string, string> = {};
+          data.issues.forEach((issue: any) => {
+            const fieldPath = issue.path?.join(".") || "form";
+            errors[fieldPath] = issue.message || "Invalid value";
+          });
+          setFieldErrors(errors);
+          setError("Please fix the errors below and try again.");
+        } else {
+          setError(data.error || "Failed to create customer");
+        }
+        return;
+      }
+      
       router.push(`/customers/${data.customer.id}`);
     } catch {
       setError("Something went wrong. Please try again.");
@@ -166,10 +194,13 @@ export default function NewCustomerPage() {
 
   function inp(name: string, placeholder?: string, type = "text") {
     return (
-      <input name={name} type={type} value={(form as any)[name]} onChange={handleChange}
-        placeholder={placeholder} style={S.input}
-        onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
-        onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+      <div>
+        <input name={name} type={type} value={(form as any)[name]} onChange={handleChange}
+          placeholder={placeholder} style={S.input}
+          onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+        <FieldError message={fieldErrors[name]} />
+      </div>
     );
   }
 

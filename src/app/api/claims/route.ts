@@ -7,10 +7,10 @@ import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
 
 const createClaimSchema = z.object({
-  policyId: z.string().uuid(),
-  dateOfLoss: z.string(),
-  dateReported: z.string(),
-  natureOfLoss: z.enum(["Accident", "Theft", "Fire", "Flood", "Vandalism", "Other"]),
+  policyId: z.string().uuid("Please select a valid policy"),
+  dateOfLoss: z.string().min(1, "Date of loss is required"),
+  dateReported: z.string().min(1, "Date reported is required"),
+  natureOfLoss: z.enum(["Accident", "Theft", "Fire", "Flood", "Vandalism", "Other"], { message: "Please select a valid nature of loss" }),
   location: z.string().optional().nullable(),
   thirdPartyInvolved: z.boolean().default(false),
   thirdPartyDetails: z.object({

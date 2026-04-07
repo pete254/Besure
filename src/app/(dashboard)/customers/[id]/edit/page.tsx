@@ -106,6 +106,16 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: "0.05em",
 };
 
+// Component for inline error messages
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px", fontWeight: 500 }}>
+      ⚠ {message}
+    </div>
+  );
+}
+
 const sectionStyle: React.CSSProperties = {
   backgroundColor: "var(--bg-card)",
   border: "1px solid var(--border)",
@@ -128,6 +138,7 @@ export default function EditCustomerPage() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [directors, setDirectors] = useState<Director[]>([]);
 
   const [form, setForm] = useState({
@@ -248,6 +259,7 @@ export default function EditCustomerPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setFieldErrors({});
     setLoading(true);
 
     try {
@@ -273,7 +285,18 @@ export default function EditCustomerPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Failed to update customer");
+        // Handle Zod validation errors with field paths
+        if (data.issues && Array.isArray(data.issues)) {
+          const errors: Record<string, string> = {};
+          data.issues.forEach((issue: any) => {
+            const fieldPath = issue.path?.join(".") || "form";
+            errors[fieldPath] = issue.message || "Invalid value";
+          });
+          setFieldErrors(errors);
+          setError("Please fix the errors below and try again.");
+        } else {
+          setError(data.error || "Failed to update customer");
+        }
         return;
       }
 
@@ -350,22 +373,27 @@ export default function EditCustomerPage() {
               <div style={{ gridColumn: "span 2" }}>
                 <label style={labelStyle}>Company Name *</label>
                 <input name="companyName" value={form.companyName} onChange={handleChange} placeholder="e.g. Acme Ltd" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                <FieldError message={fieldErrors.companyName} />
               </div>
               <div>
                 <label style={labelStyle}>Town</label>
                 <input name="town" value={form.town} onChange={handleChange} placeholder="e.g. Nairobi" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                <FieldError message={fieldErrors.town} />
               </div>
               <div>
                 <label style={labelStyle}>Postal Address</label>
                 <input name="postalAddress" value={form.postalAddress} onChange={handleChange} placeholder="e.g. P.O Box 1234-00100" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                <FieldError message={fieldErrors.postalAddress} />
               </div>
               <div>
                 <label style={labelStyle}>Company Email</label>
                 <input name="companyEmail" type="email" value={form.companyEmail} onChange={handleChange} placeholder="info@company.co.ke" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                <FieldError message={fieldErrors.companyEmail} />
               </div>
               <div>
                 <label style={labelStyle}>Company Phone</label>
                 <input name="companyPhone" value={form.companyPhone} onChange={handleChange} placeholder="0700 000 000" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                <FieldError message={fieldErrors.companyPhone} />
               </div>
             </div>
           </div>
@@ -378,27 +406,33 @@ export default function EditCustomerPage() {
             <div>
               <label style={labelStyle}>First Name *</label>
               <input name="firstName" value={form.firstName} onChange={handleChange} placeholder="John" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              <FieldError message={fieldErrors.firstName} />
             </div>
             <div>
               <label style={labelStyle}>Last Name *</label>
               <input name="lastName" value={form.lastName} onChange={handleChange} placeholder="Doe" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              <FieldError message={fieldErrors.lastName} />
             </div>
             <div>
               <label style={labelStyle}>Middle Name</label>
               <input name="middleName" value={form.middleName} onChange={handleChange} placeholder="Optional" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              <FieldError message={fieldErrors.middleName} />
             </div>
             <div>
               <label style={labelStyle}>Phone Number *</label>
               <input name="phone" value={form.phone} onChange={handleChange} placeholder="0712 345 678" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              <FieldError message={fieldErrors.phone} />
             </div>
             <div>
               <label style={labelStyle}>Email Address</label>
               <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="john@email.com" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+              <FieldError message={fieldErrors.email} />
             </div>
             {!isCompany && (
               <div>
                 <label style={labelStyle}>Date of Birth</label>
                 <input name="dateOfBirth" type="date" value={form.dateOfBirth} onChange={handleChange} style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                <FieldError message={fieldErrors.dateOfBirth} />
               </div>
             )}
             {!isCompany && (
@@ -410,6 +444,7 @@ export default function EditCustomerPage() {
                   <option value="Female">Female</option>
                   <option value="Other">Other</option>
                 </select>
+                <FieldError message={fieldErrors.gender} />
               </div>
             )}
           </div>
@@ -425,10 +460,12 @@ export default function EditCustomerPage() {
                 <option value="">Select county</option>
                 {KENYA_COUNTIES.map((c) => <option key={c}>{c}</option>)}
               </select>
+              <FieldError message={fieldErrors.county} />
             </div>
             <div>
               <label style={labelStyle}>Physical Address</label>
               <textarea name="physicalAddress" value={form.physicalAddress} onChange={handleChange} placeholder="Street, building, area..." rows={2} style={{ ...inputStyle, resize: "vertical" }} onFocus={focusStyle} onBlur={blurStyle} />
+              <FieldError message={fieldErrors.physicalAddress} />
             </div>
           </div>
         </div>

@@ -252,9 +252,10 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("GET /api/dashboard/summary error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("GET /api/dashboard/summary error:", errorMessage, error);
     return NextResponse.json(
-      { error: "Failed to fetch dashboard data" },
+      { error: "Failed to fetch dashboard data", details: errorMessage },
       { status: 500 }
     );
   }

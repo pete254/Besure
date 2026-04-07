@@ -15,12 +15,23 @@ interface PolicyOption {
 
 const NATURE_OPTIONS = ["Accident", "Theft", "Fire", "Flood", "Vandalism", "Other"];
 
+// Component for inline error messages
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px", fontWeight: 500 }}>
+      ⚠ {message}
+    </div>
+  );
+}
+
 export default function NewClaimPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [policies, setPolicies] = useState<PolicyOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({
     policyId: searchParams.get("policyId") || "",
@@ -48,9 +59,10 @@ export default function NewClaimPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.policyId) { setError("Please select a policy"); return; }
-    if (!form.dateOfLoss) { setError("Date of loss is required"); return; }
+    if (!form.policyId) { setError("Please select a policy"); setFieldErrors({ policyId: "Please select a policy" }); return; }
+    if (!form.dateOfLoss) { setError("Date of loss is required"); setFieldErrors({ dateOfLoss: "Date of loss is required" }); return; }
     setError("");
+    setFieldErrors({});
     setLoading(true);
 
     try {
@@ -78,7 +90,21 @@ export default function NewClaimPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Failed to create claim"); return; }
+      if (!res.ok) {
+        // Handle Zod validation errors with field paths
+        if (data.issues && Array.isArray(data.issues)) {
+          const errors: Record<string, string> = {};
+          data.issues.forEach((issue: any) => {
+            const fieldPath = issue.path?.join(".") || "form";
+            errors[fieldPath] = issue.message || "Invalid value";
+          });
+          setFieldErrors(errors);
+          setError("Please fix the errors below and try again.");
+        } else {
+          setError(data.error || "Failed to create claim");
+        }
+        return;
+      }
       router.push(`/claims/${data.claim.id}`);
     } catch {
       setError("Something went wrong.");
@@ -123,6 +149,7 @@ export default function NewClaimPage() {
                 return <option key={p.policy.id} value={p.policy.id}>{label}</option>;
               })}
             </select>
+            <FieldError message={fieldErrors.policyId} />
           </div>
 
           {selectedPolicy?.vehicle && (
@@ -147,6 +174,7 @@ export default function NewClaimPage() {
                 style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
                 onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
                 onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+              <FieldError message={fieldErrors.dateOfLoss} />
             </div>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Date Reported *</label>
@@ -154,6 +182,7 @@ export default function NewClaimPage() {
                 style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
                 onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
                 onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+              <FieldError message={fieldErrors.dateReported} />
             </div>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Nature of Loss *</label>
@@ -163,6 +192,7 @@ export default function NewClaimPage() {
                 onBlur={(e) => { (e.target as HTMLSelectElement).style.borderColor = "var(--border)"; }}>
                 {NATURE_OPTIONS.map(n => <option key={n}>{n}</option>)}
               </select>
+              <FieldError message={fieldErrors.natureOfLoss} />
             </div>
             <div style={{ gridColumn: "span 2" }}>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Accident Location</label>
@@ -170,6 +200,7 @@ export default function NewClaimPage() {
                 style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
                 onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
                 onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+              <FieldError message={fieldErrors.location} />
             </div>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Police Abstract No.</label>
