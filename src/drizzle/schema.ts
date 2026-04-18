@@ -575,6 +575,23 @@ export const garageUpdatesRelations = relations(garageUpdates, ({ one }) => ({
 }));
 
 // ─────────────────────────────────────────────
+// DRAFTS — Wizard/Form State Persistence
+// ─────────────────────────────────────────────
+
+export const drafts = pgTable("drafts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  draftType: varchar("draft_type", { length: 50 }).notNull(), // "policy" | "claim"
+  draftKey: varchar("draft_key", { length: 100 }).notNull(),  // e.g. "policy-new"
+  sessionId: varchar("session_id", { length: 100 }),
+  data: text("data").notNull(),                                // JSON stringified wizard state
+  step: varchar("step", { length: 10 }),                       // current wizard step number
+  label: varchar("label", { length: 255 }),                    // friendly display label
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at"),
+});
+
+// ─────────────────────────────────────────────
 // TYPE EXPORTS
 // ─────────────────────────────────────────────
 
@@ -603,4 +620,6 @@ export type Claim = typeof claims.$inferSelect;
 export type NewClaim = typeof claims.$inferInsert;
 export type ClaimDocument = typeof claimDocuments.$inferSelect;
 export type GarageUpdate = typeof garageUpdates.$inferSelect;
+export type Draft = typeof drafts.$inferSelect;
+export type NewDraft = typeof drafts.$inferInsert;
 export type User = typeof users.$inferSelect;

@@ -6,6 +6,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Plus, Trash2, Upload, X, FileText } from "lucide-react";
+import FieldErrorComponent from "@/components/ui/FieldError";
+import {
+  validatePhone,
+  validateEmail,
+  validateRequired,
+  validateKRAPin,
+  runValidators,
+} from "@/lib/validation";
 
 const KENYA_COUNTIES = [
   "Baringo","Bomet","Bungoma","Busia","Elgeyo-Marakwet","Embu","Garissa",
@@ -106,8 +114,8 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: "0.05em",
 };
 
-// Component for inline error messages
-function FieldError({ message }: { message?: string }) {
+// Component for inline error messages - kept for backwards compatibility  
+function FieldErrorLegacy({ message }: { message?: string }) {
   if (!message) return null;
   return (
     <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px", fontWeight: 500 }}>
@@ -228,6 +236,10 @@ export default function EditCustomerPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    // Clear field error when user starts typing
+    if (fieldErrors[e.target.name]) {
+      setFieldErrors(prev => ({ ...prev, [e.target.name]: "" }));
+    }
   }
 
   function handleDocValue(key: string, val: string) {
@@ -260,6 +272,38 @@ export default function EditCustomerPage() {
     e.preventDefault();
     setError("");
     setFieldErrors({});
+    
+    // Validate required fields
+    const errors = runValidators([
+      { field: "firstName", fn: () => validateRequired(form.firstName, "First name") },
+      { field: "lastName", fn: () => validateRequired(form.lastName, "Last name") },
+      { field: "phone", fn: () => validatePhone(form.phone) },
+      { field: "email", fn: () => validateEmail(form.email) },
+      { field: "kraPinValue", fn: () => validateKRAPin(form.kraPinValue) },
+    ]);
+
+    // Validate directors if company type
+    const isCompany = form.customerType === "Company";
+    if (isCompany) {
+      directors.forEach((director, idx) => {
+        if (!director.name?.trim()) {
+          errors[`director_${idx}_name`] = "Director name is required";
+        }
+      });
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Please fix the errors below and try again.");
+      setTimeout(() => {
+        const firstError = document.querySelector("[data-error='true']");
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 50);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -373,27 +417,27 @@ export default function EditCustomerPage() {
               <div style={{ gridColumn: "span 2" }}>
                 <label style={labelStyle}>Company Name *</label>
                 <input name="companyName" value={form.companyName} onChange={handleChange} placeholder="e.g. Acme Ltd" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-                <FieldError message={fieldErrors.companyName} />
+                <FieldErrorComponent message={fieldErrors.companyName} />
               </div>
               <div>
                 <label style={labelStyle}>Town</label>
                 <input name="town" value={form.town} onChange={handleChange} placeholder="e.g. Nairobi" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-                <FieldError message={fieldErrors.town} />
+                <FieldErrorComponent message={fieldErrors.town} />
               </div>
               <div>
                 <label style={labelStyle}>Postal Address</label>
                 <input name="postalAddress" value={form.postalAddress} onChange={handleChange} placeholder="e.g. P.O Box 1234-00100" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-                <FieldError message={fieldErrors.postalAddress} />
+                <FieldErrorComponent message={fieldErrors.postalAddress} />
               </div>
               <div>
                 <label style={labelStyle}>Company Email</label>
                 <input name="companyEmail" type="email" value={form.companyEmail} onChange={handleChange} placeholder="info@company.co.ke" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-                <FieldError message={fieldErrors.companyEmail} />
+                <FieldErrorComponent message={fieldErrors.companyEmail} />
               </div>
               <div>
                 <label style={labelStyle}>Company Phone</label>
                 <input name="companyPhone" value={form.companyPhone} onChange={handleChange} placeholder="0700 000 000" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-                <FieldError message={fieldErrors.companyPhone} />
+                <FieldErrorComponent message={fieldErrors.companyPhone} />
               </div>
             </div>
           </div>
@@ -403,36 +447,36 @@ export default function EditCustomerPage() {
         <div style={sectionStyle}>
           <p style={sectionTitleStyle}>{isCompany ? "Primary Contact Person" : "Personal Information"}</p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
-            <div>
+            <div data-error={!!fieldErrors.firstName || undefined}>
               <label style={labelStyle}>First Name *</label>
-              <input name="firstName" value={form.firstName} onChange={handleChange} placeholder="John" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-              <FieldError message={fieldErrors.firstName} />
+              <input name="firstName" value={form.firstName} onChange={handleChange} placeholder="John" required style={{ ...inputStyle, borderColor: fieldErrors.firstName ? "#f87171" : "var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.firstName ? "#f87171" : "var(--brand)"; (e.target as HTMLElement).style.boxShadow = "0 0 0 2px rgba(16,185,129,0.15)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.firstName ? "#f87171" : "var(--border)"; (e.target as HTMLElement).style.boxShadow = "none"; }} />
+              <FieldErrorComponent message={fieldErrors.firstName} />
             </div>
-            <div>
+            <div data-error={!!fieldErrors.lastName || undefined}>
               <label style={labelStyle}>Last Name *</label>
-              <input name="lastName" value={form.lastName} onChange={handleChange} placeholder="Doe" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-              <FieldError message={fieldErrors.lastName} />
+              <input name="lastName" value={form.lastName} onChange={handleChange} placeholder="Doe" required style={{ ...inputStyle, borderColor: fieldErrors.lastName ? "#f87171" : "var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.lastName ? "#f87171" : "var(--brand)"; (e.target as HTMLElement).style.boxShadow = "0 0 0 2px rgba(16,185,129,0.15)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.lastName ? "#f87171" : "var(--border)"; (e.target as HTMLElement).style.boxShadow = "none"; }} />
+              <FieldErrorComponent message={fieldErrors.lastName} />
             </div>
             <div>
               <label style={labelStyle}>Middle Name</label>
               <input name="middleName" value={form.middleName} onChange={handleChange} placeholder="Optional" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-              <FieldError message={fieldErrors.middleName} />
+              <FieldErrorComponent message={fieldErrors.middleName} />
             </div>
-            <div>
+            <div data-error={!!fieldErrors.phone || undefined}>
               <label style={labelStyle}>Phone Number *</label>
-              <input name="phone" value={form.phone} onChange={handleChange} placeholder="0712 345 678" required style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-              <FieldError message={fieldErrors.phone} />
+              <input name="phone" value={form.phone} onChange={handleChange} placeholder="0712 345 678" required style={{ ...inputStyle, borderColor: fieldErrors.phone ? "#f87171" : "var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.phone ? "#f87171" : "var(--brand)"; (e.target as HTMLElement).style.boxShadow = "0 0 0 2px rgba(16,185,129,0.15)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.phone ? "#f87171" : "var(--border)"; (e.target as HTMLElement).style.boxShadow = "none"; }} />
+              <FieldErrorComponent message={fieldErrors.phone} />
             </div>
-            <div>
+            <div data-error={!!fieldErrors.email || undefined}>
               <label style={labelStyle}>Email Address</label>
-              <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="john@email.com" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-              <FieldError message={fieldErrors.email} />
+              <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="john@email.com" style={{ ...inputStyle, borderColor: fieldErrors.email ? "#f87171" : "var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.email ? "#f87171" : "var(--brand)"; (e.target as HTMLElement).style.boxShadow = "0 0 0 2px rgba(16,185,129,0.15)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.email ? "#f87171" : "var(--border)"; (e.target as HTMLElement).style.boxShadow = "none"; }} />
+              <FieldErrorComponent message={fieldErrors.email} />
             </div>
             {!isCompany && (
               <div>
                 <label style={labelStyle}>Date of Birth</label>
                 <input name="dateOfBirth" type="date" value={form.dateOfBirth} onChange={handleChange} style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
-                <FieldError message={fieldErrors.dateOfBirth} />
+                <FieldErrorComponent message={fieldErrors.dateOfBirth} />
               </div>
             )}
             {!isCompany && (
@@ -444,7 +488,7 @@ export default function EditCustomerPage() {
                   <option value="Female">Female</option>
                   <option value="Other">Other</option>
                 </select>
-                <FieldError message={fieldErrors.gender} />
+                <FieldErrorComponent message={fieldErrors.gender} />
               </div>
             )}
           </div>
@@ -460,12 +504,12 @@ export default function EditCustomerPage() {
                 <option value="">Select county</option>
                 {KENYA_COUNTIES.map((c) => <option key={c}>{c}</option>)}
               </select>
-              <FieldError message={fieldErrors.county} />
+              <FieldErrorComponent message={fieldErrors.county} />
             </div>
             <div>
               <label style={labelStyle}>Physical Address</label>
               <textarea name="physicalAddress" value={form.physicalAddress} onChange={handleChange} placeholder="Street, building, area..." rows={2} style={{ ...inputStyle, resize: "vertical" }} onFocus={focusStyle} onBlur={blurStyle} />
-              <FieldError message={fieldErrors.physicalAddress} />
+              <FieldErrorComponent message={fieldErrors.physicalAddress} />
             </div>
           </div>
         </div>

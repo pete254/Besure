@@ -1,5 +1,7 @@
 // src/app/api/calculator/premium/route.ts
 // Stateless premium calculation endpoint
+// Formula: Grand Total = Basic Premium + Total Benefits + IRA Levy (0.45% of Basic+Benefits) + Stamp Duty (40) + PHCF (100)
+// Training levy REMOVED per IRA regulations update
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -62,21 +64,25 @@ export async function POST(req: NextRequest) {
         minPremium = parseFloat(insurer.minPremiumPsv || "0");
     }
 
-    // Calculate
+    // ── Core calculations ──────────────────────────────────────────
     const calculatedBasicPremium = (sumInsured * basicRate) / 100;
     const basicPremium = Math.max(calculatedBasicPremium, minPremium);
     const minimumApplied = calculatedBasicPremium < minPremium && minPremium > 0;
 
-    const iraLevy = basicPremium * 0.0045;
-    const trainingLevy = basicPremium * 0.002;
-    const stampDuty = 40;
-    const phcf = 100;
-
     const totalBenefits = benefits.reduce((s, b) => s + b.amountKes, 0);
-    const grandTotal =
-      basicPremium + totalBenefits + iraLevy + trainingLevy + stampDuty + phcf;
 
-    // Agency commission (for display only)
+    // IRA Levy = 0.45% of (Basic Premium + Total Benefits)
+    const iraLevy = (basicPremium + totalBenefits) * 0.0045;
+
+    // Fixed statutory charges
+    const stampDuty = 40;
+    const phcf = 0;  // PHCF removed per client request
+
+    // Grand Total = Basic Premium + Benefits + IRA Levy + Stamp Duty
+    // Training levy REMOVED, PHCF REMOVED
+    const grandTotal = basicPremium + totalBenefits + iraLevy + stampDuty;
+
+    // Agency commission (for display only — not charged to client)
     const commissionRate = parseFloat(insurer?.commissionRate || "0");
     const agencyCommission = (grandTotal * commissionRate) / 100;
 
@@ -87,18 +93,17 @@ export async function POST(req: NextRequest) {
       basicPremium: parseFloat(basicPremium.toFixed(2)),
       minimumApplied,
       minPremium: minimumApplied ? minPremium : null,
+      totalBenefits: parseFloat(totalBenefits.toFixed(2)),
       iraLevy: parseFloat(iraLevy.toFixed(2)),
-      trainingLevy: parseFloat(trainingLevy.toFixed(2)),
+      // trainingLevy removed — kept as 0 for schema compatibility
+      trainingLevy: 0,
       stampDuty,
       phcf,
-      totalBenefits: parseFloat(totalBenefits.toFixed(2)),
       grandTotal: parseFloat(grandTotal.toFixed(2)),
       agencyCommission: parseFloat(agencyCommission.toFixed(2)),
       commissionRate,
       benefits,
-      insurer: insurer
-        ? { id: insurer.id, name: insurer.name }
-        : null,
+      insurer: insurer ? { id: insurer.id, name: insurer.name } : null,
     });
   } catch (error) {
     console.error("POST /api/calculator/premium error:", error);

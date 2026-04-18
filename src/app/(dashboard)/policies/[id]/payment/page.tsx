@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import FieldError from "@/components/ui/FieldError";
 
 interface Payment {
   id: string;
@@ -46,6 +47,7 @@ export default function RecordPaymentPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({
     amountPaid: "",
@@ -77,10 +79,47 @@ export default function RecordPaymentPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedPayment) return;
-    setSaving(true);
+    
     setError("");
-    setSuccess("");
+    setFieldErrors({});
+    const errors: Record<string, string> = {};
 
+    // Validate amount paid
+    const amt = parseFloat(form.amountPaid);
+    if (!form.amountPaid || isNaN(amt) || amt <= 0) {
+      errors.amountPaid = "Enter a valid payment amount greater than KES 0";
+    } else if (amt > parseFloat(selectedPayment.amountDue) * 2) {
+      errors.amountPaid = "Amount paid exceeds double the installment amount — please verify";
+    }
+
+    // Validate payment date
+    if (!form.paidDate) {
+      errors.paidDate = "Payment date is required";
+    } else {
+      const futureDate = new Date(form.paidDate) > new Date();
+      if (futureDate) {
+        errors.paidDate = "Payment date cannot be in the future";
+      }
+    }
+
+    // Validate payment method
+    if (!form.paymentMethod) {
+      errors.paymentMethod = "Please select a payment method";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Please fix the errors below before continuing.");
+      setTimeout(() => {
+        const firstError = document.querySelector("[data-error='true']");
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 50);
+      return;
+    }
+
+    setSaving(true);
     try {
       const res = await fetch(`/api/policies/${id}/payments`, {
         method: "POST",
@@ -108,6 +147,13 @@ export default function RecordPaymentPage() {
       setError("Something went wrong.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function handleFormChange(key: string, value: string | boolean) {
+    setForm(prev => ({ ...prev, [key]: value }));
+    if (fieldErrors[key]) {
+      setFieldErrors(prev => ({ ...prev, [key]: "" }));
     }
   }
 
@@ -231,7 +277,7 @@ export default function RecordPaymentPage() {
                   </p>
                 </div>
 
-                <div>
+                <div data-error={!!fieldErrors.amountPaid || undefined}>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     Amount Paid (KES) *
                   </label>
@@ -240,14 +286,15 @@ export default function RecordPaymentPage() {
                     step="0.01"
                     required
                     value={form.amountPaid}
-                    onChange={(e) => setForm(prev => ({ ...prev, amountPaid: e.target.value }))}
-                    style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
-                    onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
-                    onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+                    onChange={(e) => handleFormChange("amountPaid", e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: `1px solid ${fieldErrors.amountPaid ? "#f87171" : "var(--border)"}`, borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+                    onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = fieldErrors.amountPaid ? "#f87171" : "var(--brand)"; }}
+                    onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = fieldErrors.amountPaid ? "#f87171" : "var(--border)"; }}
                   />
+                  <FieldError message={fieldErrors.amountPaid} />
                 </div>
 
-                <div>
+                <div data-error={!!fieldErrors.paidDate || undefined}>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     Payment Date *
                   </label>
@@ -255,27 +302,29 @@ export default function RecordPaymentPage() {
                     type="date"
                     required
                     value={form.paidDate}
-                    onChange={(e) => setForm(prev => ({ ...prev, paidDate: e.target.value }))}
-                    style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
-                    onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
-                    onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+                    onChange={(e) => handleFormChange("paidDate", e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: `1px solid ${fieldErrors.paidDate ? "#f87171" : "var(--border)"}`, borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+                    onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = fieldErrors.paidDate ? "#f87171" : "var(--brand)"; }}
+                    onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = fieldErrors.paidDate ? "#f87171" : "var(--border)"; }}
                   />
+                  <FieldError message={fieldErrors.paidDate} />
                 </div>
 
-                <div>
+                <div data-error={!!fieldErrors.paymentMethod || undefined}>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     Payment Method *
                   </label>
                   <select
                     required
                     value={form.paymentMethod}
-                    onChange={(e) => setForm(prev => ({ ...prev, paymentMethod: e.target.value }))}
-                    style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
-                    onFocus={(e) => { (e.target as HTMLSelectElement).style.borderColor = "var(--brand)"; }}
-                    onBlur={(e) => { (e.target as HTMLSelectElement).style.borderColor = "var(--border)"; }}
+                    onChange={(e) => handleFormChange("paymentMethod", e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: `1px solid ${fieldErrors.paymentMethod ? "#f87171" : "var(--border)"}`, borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+                    onFocus={(e) => { (e.target as HTMLSelectElement).style.borderColor = fieldErrors.paymentMethod ? "#f87171" : "var(--brand)"; }}
+                    onBlur={(e) => { (e.target as HTMLSelectElement).style.borderColor = fieldErrors.paymentMethod ? "#f87171" : "var(--border)"; }}
                   >
                     {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
                   </select>
+                  <FieldError message={fieldErrors.paymentMethod} />
                 </div>
 
                 <div>
@@ -285,7 +334,7 @@ export default function RecordPaymentPage() {
                   <input
                     placeholder="e.g. QHG4X2Y1Z3"
                     value={form.referenceNo}
-                    onChange={(e) => setForm(prev => ({ ...prev, referenceNo: e.target.value }))}
+                    onChange={(e) => handleFormChange("referenceNo", e.target.value)}
                     style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
                     onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
                     onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}

@@ -6,6 +6,14 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+import FieldError from "@/components/ui/FieldError";
+import {
+  validatePhone,
+  validateEmail,
+  validateRequired,
+  validateKRAPin,
+  runValidators,
+} from "@/lib/validation";
 
 const KENYA_COUNTIES = [
   "Baringo","Bomet","Bungoma","Busia","Elgeyo-Marakwet","Embu","Garissa",
@@ -27,8 +35,8 @@ interface Director {
 
 const emptyDirector: Director = { name: "", idNumber: "", idNumberValue: "", kraPin: "", kraPinValue: "" };
 
-// Component for inline error messages
-function FieldError({ message }: { message?: string }) {
+// Component for inline error messages - kept for backwards compatibility
+function FieldErrorLegacy({ message }: { message?: string }) {
   if (!message) return null;
   return (
     <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px", fontWeight: 500 }}>
@@ -125,6 +133,10 @@ export default function NewCustomerPage() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    // Clear field error when user starts typing
+    if (fieldErrors[e.target.name]) {
+      setFieldErrors(prev => ({ ...prev, [e.target.name]: "" }));
+    }
   }
 
   function handleDocValue(key: string, val: string) {
@@ -147,6 +159,41 @@ export default function NewCustomerPage() {
     e.preventDefault();
     setError("");
     setFieldErrors({});
+
+    // Validate required fields
+    const errors = runValidators([
+      { field: "firstName", fn: () => validateRequired(form.firstName, "First name") },
+      { field: "lastName", fn: () => validateRequired(form.lastName, "Last name") },
+      { field: "phone", fn: () => validatePhone(form.phone) },
+      { field: "email", fn: () => validateEmail(form.email) },
+      { field: "kraPinValue", fn: () => validateKRAPin(form.kraPinValue) },
+      ...(isCompany
+        ? [{ field: "companyName", fn: () => validateRequired(form.companyName, "Company name") }]
+        : []),
+    ]);
+
+    // Validate directors if company type
+    if (isCompany) {
+      directors.forEach((director, idx) => {
+        if (!director.name?.trim()) {
+          errors[`director_${idx}_name`] = "Director name is required";
+        }
+      });
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Please fix the errors below and try again.");
+      // Scroll to first error
+      setTimeout(() => {
+        const firstError = document.querySelector("[data-error='true']");
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 50);
+      return;
+    }
+
     setLoading(true);
     try {
       // Extract only the fields needed for the API (exclude file names)
@@ -162,12 +209,12 @@ export default function NewCustomerPage() {
       if (!res.ok) {
         // Handle Zod validation errors with field paths
         if (data.issues && Array.isArray(data.issues)) {
-          const errors: Record<string, string> = {};
+          const apiErrors: Record<string, string> = {};
           data.issues.forEach((issue: any) => {
             const fieldPath = issue.path?.join(".") || "form";
-            errors[fieldPath] = issue.message || "Invalid value";
+            apiErrors[fieldPath] = issue.message || "Invalid value";
           });
-          setFieldErrors(errors);
+          setFieldErrors(apiErrors);
           setError("Please fix the errors below and try again.");
         } else {
           setError(data.error || "Failed to create customer");
@@ -194,11 +241,28 @@ export default function NewCustomerPage() {
 
   function inp(name: string, placeholder?: string, type = "text") {
     return (
-      <div>
-        <input name={name} type={type} value={(form as any)[name]} onChange={handleChange}
-          placeholder={placeholder} style={S.input}
-          onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
-          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+      <div data-error={!!fieldErrors[name] || undefined}>
+        <input
+          name={name}
+          type={type}
+          value={(form as any)[name]}
+          onChange={handleChange}
+          placeholder={placeholder}
+          style={{
+            ...S.input,
+            borderColor: fieldErrors[name] ? "#f87171" : "var(--border)",
+          }}
+          onFocus={(e) => {
+            (e.target as HTMLInputElement).style.borderColor = fieldErrors[name]
+              ? "#f87171"
+              : "var(--brand)";
+          }}
+          onBlur={(e) => {
+            (e.target as HTMLInputElement).style.borderColor = fieldErrors[name]
+              ? "#f87171"
+              : "var(--border)";
+          }}
+        />
         <FieldError message={fieldErrors[name]} />
       </div>
     );
@@ -346,12 +410,33 @@ export default function NewCustomerPage() {
                       </button>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                      <div style={{ gridColumn: "span 2" }}>
+                      <div style={{ gridColumn: "span 2" }} data-error={!!fieldErrors[`director_${i}_name`] || undefined}>
                         <label style={S.label}>Full Name</label>
-                        <input value={d.name} onChange={(e) => updateDirector(i, "name", e.target.value)}
-                          placeholder="Director full name" style={S.input}
-                          onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
-                          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+                        <input
+                          value={d.name}
+                          onChange={(e) => {
+                            updateDirector(i, "name", e.target.value);
+                            if (fieldErrors[`director_${i}_name`]) {
+                              setFieldErrors(prev => ({ ...prev, [`director_${i}_name`]: "" }));
+                            }
+                          }}
+                          placeholder="Director full name"
+                          style={{
+                            ...S.input,
+                            borderColor: fieldErrors[`director_${i}_name`]
+                              ? "#f87171"
+                              : "var(--border)",
+                          }}
+                          onFocus={(e) => {
+                            (e.target as HTMLInputElement).style.borderColor =
+                              fieldErrors[`director_${i}_name`] ? "#f87171" : "var(--brand)";
+                          }}
+                          onBlur={(e) => {
+                            (e.target as HTMLInputElement).style.borderColor =
+                              fieldErrors[`director_${i}_name`] ? "#f87171" : "var(--border)";
+                          }}
+                        />
+                        <FieldError message={fieldErrors[`director_${i}_name`]} />
                       </div>
                       <div>
                         <label style={S.label}>National ID Number</label>

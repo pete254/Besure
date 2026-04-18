@@ -6,6 +6,17 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import FieldError from "@/components/ui/FieldError";
+import DraftBanner from "@/components/DraftBanner";
+import { useDraft } from "@/hooks/useDraft";
+import {
+  validateRequired,
+  validateYear,
+  validateRegNo,
+  validateSumInsured,
+  validateRate,
+  runValidators,
+} from "@/lib/validation";
 
 interface Insurer {
   id: string; name: string; isActive: boolean;
@@ -22,8 +33,11 @@ interface BenefitEntry {
   benefitOptionId: string;
   benefitName: string;
   amountKes: string;
+  // Extra fields per benefit type
   windscreenValue?: string;
+  entertainmentValue?: string;
   lossOfUseDays?: string;
+  passengerCount?: string;
 }
 
 interface PolicyData {
@@ -37,7 +51,7 @@ interface PolicyData {
   };
   coverType: string; sumInsured: string; startDate: string; endDate: string; policyNumber: string;
   basicRate: string; basicPremium: string;
-  iraLevy: string;           // 0.45% of basic premium (training levy IS included here)
+  iraLevy: string;
   stampDuty: string; phcf: string;
   benefits: BenefitEntry[]; totalBenefits: string;
   grandTotal: string; paymentMode: string; ipfProvider: string; ipfLoanReference: string; notes: string;
@@ -62,12 +76,19 @@ const STEPS = [
   "Cover & Valuation", "Rate & Premium", "Benefits", "Summary & Payment",
 ];
 
+// Benefit type identifiers
 const BENEFIT_TYPES: Record<string, string> = {
   "Excess Protector": "excess",
   "Windscreen Cover": "windscreen",
-  "Loss of Use / Car Hire": "loss_of_use",
   "Entertainment Unit": "entertainment",
+  "Loss of Use / Car Hire": "loss_of_use",
+  "Personal Accident - Driver": "pa_driver",
+  "Personal Accident - Passengers": "pa_passengers",
 };
+
+function getBenefitType(name: string): string {
+  return BENEFIT_TYPES[name] || "custom";
+}
 
 function formatKES(val: string) {
   const n = parseFloat(val || "0");
@@ -75,11 +96,19 @@ function formatKES(val: string) {
   return `KES ${n.toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
 }
 
+// Calculate windscreen/entertainment premium: ≤50k = free, >50k = 10% of value
+function calcCoverageItemPremium(value: string): string {
+  const v = parseFloat(value || "0");
+  if (isNaN(v) || v <= 0) return "0.00";
+  if (v <= 50000) return "0.00";
+  return (v * 0.1).toFixed(2);
+}
+
 const emptyPolicy: PolicyData = {
   insuranceType: "", customerId: "", customerName: "", insurerId: "", insurerNameManual: "",
   vehicle: { make: "", model: "", year: "", cc: "", tonnage: "", seats: "", chassisNo: "", engineNo: "", regNo: "", bodyType: "", colour: "" },
   coverType: "", sumInsured: "", startDate: "", endDate: "", policyNumber: "",
-  basicRate: "", basicPremium: "", iraLevy: "", stampDuty: "40", phcf: "100",
+  basicRate: "", basicPremium: "", iraLevy: "", stampDuty: "40", phcf: "0",
   benefits: [], totalBenefits: "0",
   grandTotal: "", paymentMode: "Full Payment", ipfProvider: "", ipfLoanReference: "", notes: "",
 };
@@ -98,6 +127,31 @@ export default function NewPolicyPage() {
   const [customerResults, setCustomerResults] = useState<Customer[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const draftKey = "policy-new";
+
+  // Build a friendly label from current data
+  const draftLabel = data.vehicle.make && data.vehicle.regNo
+    ? `${data.vehicle.make} ${data.vehicle.model} — ${data.vehicle.regNo}`
+    : data.insuranceType || "New Policy";
+
+  const {
+    saveDraft, clearDraft, loadDraft,
+    draftSaved, lastSaved, hasDraft, saving: draftSaving
+  } = useDraft("policy", draftKey, data, step, { label: draftLabel });
+
+  // Track whether draft was already resolved (restored or dismissed)
+  const [draftResolved, setDraftResolved] = useState(false);
+
+  // Load any existing draft on mount
+  useEffect(() => {
+    loadDraft().then(savedData => {
+      if (savedData) {
+        // hasDraft will be set true by the hook — DraftBanner handles the prompt
+      }
+    });
+  }, []);
 
   const isMotor = data.insuranceType.startsWith("Motor");
 
@@ -118,16 +172,13 @@ export default function NewPolicyPage() {
     return () => clearTimeout(t);
   }, [customerSearch]);
 
-  // ── Auto-calculate basic premium & IRA levy (0.45% — training levy IS included) ──
+  // ── Auto-calculate basic premium only (NOT grand total yet — levies come after benefits) ──
   useEffect(() => {
     const sum = parseFloat(data.sumInsured || "0");
     const rate = parseFloat(data.basicRate || "0");
     if (sum > 0 && rate > 0) {
       const basic = (sum * rate / 100).toFixed(2);
-      // IRA Levy = 0.45% of basic premium. Per IRA regulations this single figure
-      // already includes what was previously called the "training levy" – no separate line.
-      const ira = (parseFloat(basic) * 0.0045).toFixed(2);
-      setData(prev => ({ ...prev, basicPremium: basic, iraLevy: ira }));
+      setData(prev => ({ ...prev, basicPremium: basic }));
     }
   }, [data.sumInsured, data.basicRate]);
 
@@ -135,35 +186,38 @@ export default function NewPolicyPage() {
   useEffect(() => {
     setData(prev => {
       const updated = prev.benefits.map(b => {
-        if (b.benefitName === "Excess Protector") {
+        if (getBenefitType(b.benefitName) === "excess") {
           return { ...b, amountKes: (parseFloat(prev.sumInsured || "0") * 0.005).toFixed(2) };
         }
         return b;
       });
-      return {
-        ...prev,
-        benefits: updated,
-        totalBenefits: updated.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0).toFixed(2),
-      };
+      const totalBenefits = updated.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0).toFixed(2);
+      return { ...prev, benefits: updated, totalBenefits };
     });
   }, [data.sumInsured]);
 
-  // ── Grand total: basic + benefits + IRA levy + stamp + PHCF (NO separate training levy) ──
+  // ── Grand total: basic + benefits FIRST, then IRA levy on (basic + benefits), then stamp + PHCF ──
   useEffect(() => {
-    const basic  = parseFloat(data.basicPremium  || "0");
-    const bens   = parseFloat(data.totalBenefits  || "0");
-    const ira    = parseFloat(data.iraLevy        || "0");
-    const stamp  = parseFloat(data.stampDuty      || "40");
-    const phcf   = parseFloat(data.phcf           || "100");
-    setData(prev => ({ ...prev, grandTotal: (basic + bens + ira + stamp + phcf).toFixed(2) }));
-  }, [data.basicPremium, data.totalBenefits, data.iraLevy, data.stampDuty, data.phcf]);
+    const basic = parseFloat(data.basicPremium || "0");
+    const bens  = parseFloat(data.totalBenefits || "0");
+    const iraBase = basic + bens;
+    const ira   = (iraBase * 0.0045);
+    const stamp = parseFloat(data.stampDuty || "40");
+    const phcf  = parseFloat(data.phcf || "100");
+    const grand = basic + bens + ira + stamp + phcf;
+    setData(prev => ({
+      ...prev,
+      iraLevy: ira.toFixed(2),
+      grandTotal: grand.toFixed(2),
+    }));
+  }, [data.basicPremium, data.totalBenefits, data.stampDuty]);
 
   // ── Auto end date: start + 1 year − 1 day ──
   useEffect(() => {
     if (data.startDate) {
       const end = new Date(data.startDate);
       end.setFullYear(end.getFullYear() + 1);
-      end.setDate(end.getDate() - 1); // ← minus 1 day
+      end.setDate(end.getDate() - 1);
       setData(prev => ({ ...prev, endDate: end.toISOString().split("T")[0] }));
     }
   }, [data.startDate]);
@@ -189,11 +243,36 @@ export default function NewPolicyPage() {
       if (exists) {
         updated = prev.benefits.filter(x => x.benefitOptionId !== b.id);
       } else {
-        let autoAmount = "";
-        const bType = BENEFIT_TYPES[b.name];
-        if (bType === "excess") autoAmount = (parseFloat(prev.sumInsured || "0") * 0.005).toFixed(2);
-        else if (bType === "loss_of_use") autoAmount = "30000";
-        updated = [...prev.benefits, { benefitOptionId: b.id, benefitName: b.name, amountKes: autoAmount }];
+        const bType = getBenefitType(b.name);
+        let autoAmount = "0.00";
+        let extraFields: Partial<BenefitEntry> = {};
+
+        if (bType === "excess") {
+          autoAmount = (parseFloat(prev.sumInsured || "0") * 0.005).toFixed(2);
+        } else if (bType === "pa_driver") {
+          autoAmount = "2500.00";
+        } else if (bType === "pa_passengers") {
+          const seats = parseInt(prev.vehicle.seats || "4");
+          const passengers = Math.max(seats - 1, 1);
+          autoAmount = (passengers * 2500).toFixed(2);
+          extraFields = { passengerCount: String(passengers) };
+        } else if (bType === "loss_of_use") {
+          autoAmount = "30000.00";
+          extraFields = { lossOfUseDays: "10" };
+        } else if (bType === "windscreen") {
+          autoAmount = "0.00";
+          extraFields = { windscreenValue: "" };
+        } else if (bType === "entertainment") {
+          autoAmount = "0.00";
+          extraFields = { entertainmentValue: "" };
+        }
+
+        updated = [...prev.benefits, {
+          benefitOptionId: b.id,
+          benefitName: b.name,
+          amountKes: autoAmount,
+          ...extraFields,
+        }];
       }
       return { ...prev, benefits: updated, totalBenefits: recalcTotal(updated) };
     });
@@ -204,12 +283,29 @@ export default function NewPolicyPage() {
       const updated = prev.benefits.map(b => {
         if (b.benefitOptionId !== id) return b;
         const entry = { ...b, [field]: value };
-        if (field === "windscreenValue" && b.benefitName === "Windscreen Cover") {
-          const wVal = parseFloat(value || "0");
-          entry.amountKes = wVal <= 50000 ? "0" : (wVal * 0.1).toFixed(2);
+
+        const bType = getBenefitType(b.benefitName);
+
+        // Windscreen: recalc premium from windscreen value
+        if (field === "windscreenValue" && bType === "windscreen") {
+          entry.amountKes = calcCoverageItemPremium(value);
         }
-        if (field === "lossOfUseDays" && b.benefitName === "Loss of Use / Car Hire") {
-          entry.amountKes = (parseInt(value || "0") * 3000).toFixed(2);
+        // Entertainment: recalc premium from entertainment value
+        if (field === "entertainmentValue" && bType === "entertainment") {
+          entry.amountKes = calcCoverageItemPremium(value);
+        }
+        // Loss of use: 3000 for 10 days, 6000 for 20 days, 9000 for 30 days
+        if (field === "lossOfUseDays" && bType === "loss_of_use") {
+          const daysNum = parseInt(value || "10");
+          let premium = "0.00";
+          if (daysNum === 10) premium = "3000.00";
+          else if (daysNum === 20) premium = "6000.00";
+          else if (daysNum === 30) premium = "9000.00";
+          entry.amountKes = premium;
+        }
+        // PA passengers: 2500 per passenger
+        if (field === "passengerCount" && bType === "pa_passengers") {
+          entry.amountKes = (parseInt(value || "0") * 2500).toFixed(2);
         }
         return entry;
       });
@@ -217,15 +313,79 @@ export default function NewPolicyPage() {
     });
   }
 
-  function canProceed() {
-    if (step === 1) return !!data.insuranceType;
-    if (step === 2) return !!data.customerId && (!!data.insurerId || !!data.insurerNameManual);
-    if (step === 3) {
-      if (!isMotor) return true;
-      return !!(data.vehicle.make && data.vehicle.model && data.vehicle.year && data.vehicle.chassisNo && data.vehicle.engineNo && data.vehicle.regNo);
+  function validateStep(currentStep: number): Record<string, string> {
+    const errors: Record<string, string> = {};
+
+    if (currentStep === 1) {
+      if (!data.insuranceType) {
+        errors.insuranceType = "Please select an insurance type to continue";
+      }
     }
-    if (step === 4) return !!(data.startDate && data.endDate);
-    return true;
+
+    if (currentStep === 2) {
+      if (!data.customerId) {
+        errors.customerId = "Please search for and select a customer";
+      }
+      if (!data.insurerId && !data.insurerNameManual) {
+        errors.insurerId = "Please select an insurer or enter one manually";
+      }
+    }
+
+    if (currentStep === 3) {
+      if (isMotor) {
+        const vehicleErrors = runValidators([
+          { field: "make", fn: () => validateRequired(data.vehicle.make, "Make") },
+          { field: "model", fn: () => validateRequired(data.vehicle.model, "Model") },
+          { field: "year", fn: () => validateYear(data.vehicle.year) },
+          { field: "regNo", fn: () => validateRegNo(data.vehicle.regNo) },
+          { field: "chassisNo", fn: () => validateRequired(data.vehicle.chassisNo, "Chassis No.") },
+          { field: "engineNo", fn: () => validateRequired(data.vehicle.engineNo, "Engine No.") },
+        ]);
+        Object.assign(errors, vehicleErrors);
+      }
+    }
+
+    if (currentStep === 4) {
+      if (isMotor && !data.coverType) {
+        errors.coverType = "Please select a cover type (Comprehensive, TPO, or TPFT)";
+      }
+      const sumInsuredError = validateSumInsured(data.sumInsured);
+      if (sumInsuredError) {
+        errors.sumInsured = sumInsuredError;
+      }
+      if (!data.startDate) {
+        errors.startDate = "Policy start date is required";
+      }
+      if (!data.endDate) {
+        errors.endDate = "Policy end date is required";
+      }
+      if (data.startDate && data.endDate && data.endDate <= data.startDate) {
+        errors.endDate = "End date must be after the start date";
+      }
+    }
+
+    if (currentStep === 5) {
+      const rateError = validateRate(data.basicRate);
+      if (rateError) {
+        errors.basicRate = rateError;
+      }
+    }
+
+    if (currentStep === 7) {
+      if (!data.paymentMode) {
+        errors.paymentMode = "Please select a payment mode";
+      }
+      if (data.paymentMode === "IPF" && !data.ipfProvider) {
+        errors.ipfProvider = "IPF provider name is required when using Insurance Premium Financing";
+      }
+    }
+
+    return errors;
+  }
+
+  function canProceed() {
+    // Return false if there are any field errors from the current step
+    return Object.keys(fieldErrors).length === 0;
   }
 
   async function handleSubmit() {
@@ -234,7 +394,7 @@ export default function NewPolicyPage() {
     try {
       const payload = {
         ...data,
-        trainingLevy: "0", // kept for schema compat but always 0 – IRA levy covers it
+        trainingLevy: "0",
         vehicle: isMotor ? {
           ...data.vehicle,
           year: parseInt(data.vehicle.year),
@@ -251,6 +411,7 @@ export default function NewPolicyPage() {
       });
       const result = await res.json();
       if (!res.ok) { setError(result.error || "Failed to create policy"); return; }
+      await clearDraft();
       router.push(`/policies/${result.policy.id}`);
     } catch {
       setError("Something went wrong.");
@@ -274,6 +435,190 @@ export default function NewPolicyPage() {
   }
   function blr(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
     (e.target as HTMLElement).style.borderColor = "var(--border)";
+  }
+
+  // Helper to render a benefit's extra fields
+  function renderBenefitExtra(b: BenefitEntry) {
+    const bType = getBenefitType(b.benefitName);
+
+    if (bType === "excess") {
+      return (
+        <div style={{ marginTop: "10px" }}>
+          <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+            Auto-calculated (0.5% of sum insured) — editable
+          </label>
+          <input
+            type="number"
+            value={b.amountKes}
+            onChange={(e) => updateBenefitField(b.benefitOptionId, "amountKes", e.target.value)}
+            style={{ width: "200px", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", color: "var(--brand)", fontSize: "13px", outline: "none", fontWeight: 600 }}
+          />
+        </div>
+      );
+    }
+
+    if (bType === "windscreen") {
+      const wVal = parseFloat(b.windscreenValue || "0");
+      const isFree = wVal > 0 && wVal <= 50000;
+      return (
+        <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Windscreen Value (KES)
+            </label>
+            <input
+              type="number"
+              placeholder="e.g. 80000"
+              value={b.windscreenValue || ""}
+              onChange={(e) => updateBenefitField(b.benefitOptionId, "windscreenValue", e.target.value)}
+              style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+              onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+            />
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>
+              ≤ KES 50,000 = free · Above 50k: 10% of value
+            </p>
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Premium (KES)
+            </label>
+            <div style={{ padding: "7px 10px", backgroundColor: "var(--bg-card)", border: `1px solid ${isFree ? "rgba(16,185,129,0.4)" : "var(--brand)"}`, borderRadius: "6px", fontSize: "13px", fontWeight: 700, color: isFree ? "var(--brand)" : "var(--brand)" }}>
+              {isFree ? "FREE (≤ 50k)" : parseFloat(b.amountKes || "0") > 0 ? formatKES(b.amountKes) : "Enter value above"}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (bType === "entertainment") {
+      const eVal = parseFloat(b.entertainmentValue || "0");
+      const isFree = eVal > 0 && eVal <= 50000;
+      return (
+        <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Entertainment Unit Value (KES)
+            </label>
+            <input
+              type="number"
+              placeholder="e.g. 80000"
+              value={b.entertainmentValue || ""}
+              onChange={(e) => updateBenefitField(b.benefitOptionId, "entertainmentValue", e.target.value)}
+              style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+              onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+            />
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>
+              ≤ KES 50,000 = free · Above 50k: 10% of value
+            </p>
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Premium (KES)
+            </label>
+            <div style={{ padding: "7px 10px", backgroundColor: "var(--bg-card)", border: `1px solid ${isFree ? "rgba(16,185,129,0.4)" : "var(--brand)"}`, borderRadius: "6px", fontSize: "13px", fontWeight: 700, color: "var(--brand)" }}>
+              {isFree ? "FREE (≤ 50k)" : parseFloat(b.amountKes || "0") > 0 ? formatKES(b.amountKes) : "Enter value above"}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (bType === "loss_of_use") {
+      return (
+        <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Number of Days
+            </label>
+            <div style={{ display: "flex", gap: "6px" }}>
+              {["10", "20", "30"].map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => updateBenefitField(b.benefitOptionId, "lossOfUseDays", days)}
+                  style={{
+                    flex: 1, padding: "7px 4px", borderRadius: "6px", cursor: "pointer",
+                    border: `1px solid ${b.lossOfUseDays === days ? "var(--brand)" : "var(--border)"}`,
+                    backgroundColor: b.lossOfUseDays === days ? "rgba(16,185,129,0.15)" : "var(--bg-card)",
+                    color: b.lossOfUseDays === days ? "var(--brand)" : "var(--text-secondary)",
+                    fontSize: "12px", fontWeight: 600,
+                  }}
+                >
+                  {days}d
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>10d = KES 3,000 | 20d = KES 6,000 | 30d = KES 9,000</p>
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Premium (KES)
+            </label>
+            <div style={{ padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", fontSize: "13px", fontWeight: 700, color: "var(--brand)" }}>
+              {formatKES(b.amountKes)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (bType === "pa_driver") {
+      return (
+        <div style={{ marginTop: "8px" }}>
+          <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+            Fixed rate: KES 2,500 per driver
+          </p>
+        </div>
+      );
+    }
+
+    if (bType === "pa_passengers") {
+      return (
+        <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Number of Passengers
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={b.passengerCount || ""}
+              onChange={(e) => updateBenefitField(b.benefitOptionId, "passengerCount", e.target.value)}
+              style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+              onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+            />
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>KES 2,500 per passenger</p>
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Premium (KES)
+            </label>
+            <div style={{ padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", fontSize: "13px", fontWeight: 700, color: "var(--brand)" }}>
+              {formatKES(b.amountKes)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Generic/custom benefit
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
+        <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>KES</span>
+        <input
+          type="number"
+          placeholder="0.00"
+          value={b.amountKes}
+          onChange={(e) => updateBenefitField(b.benefitOptionId, "amountKes", e.target.value)}
+          style={{ width: "150px", padding: "6px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+          onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+        />
+      </div>
+    );
   }
 
   return (
@@ -307,12 +652,12 @@ export default function NewPolicyPage() {
               >
                 <div style={{
                   width: "18px", height: "18px", borderRadius: "50%",
-                  backgroundColor: active ? "var(--brand)" : done ? "var(--bg-card)" : "var(--border)",
+                  backgroundColor: fieldErrors[`step${i + 1}`] ? "#f87171" : active ? "var(--brand)" : done ? "var(--bg-card)" : "var(--border)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
-                  {done
+                  {done && !fieldErrors[`step${i + 1}`]
                     ? <Check size={10} color="var(--brand)" />
-                    : <span style={{ fontSize: "10px", fontWeight: 700, color: active ? "#000" : "var(--text-muted)" }}>{num}</span>
+                    : <span style={{ fontSize: "10px", fontWeight: 700, color: fieldErrors[`step${i + 1}`] ? "#fff" : active ? "#000" : "var(--text-muted)" }}>{num}</span>
                   }
                 </div>
                 <span style={{
@@ -336,7 +681,7 @@ export default function NewPolicyPage() {
 
       {/* ── STEP 1: Insurance Type ── */}
       {step === 1 && (
-        <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
+        <div style={{ backgroundColor: "var(--bg-card)", border: `1px solid ${fieldErrors.insuranceType ? "#f87171" : "var(--border)"}`, borderRadius: "10px", padding: "20px" }}>
           <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>Select Insurance Type</p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
             {INSURANCE_TYPES.map((t) => (
@@ -350,9 +695,16 @@ export default function NewPolicyPage() {
                 }}
               >
                 <input
-                  type="radio" name="insuranceType" value={t.value}
+                  type="radio"
+                  name="insuranceType"
+                  value={t.value}
                   checked={data.insuranceType === t.value}
-                  onChange={(e) => setData(prev => ({ ...prev, insuranceType: e.target.value }))}
+                  onChange={(e) => {
+                    setData(prev => ({ ...prev, insuranceType: e.target.value }));
+                    if (fieldErrors.insuranceType) {
+                      setFieldErrors(prev => ({ ...prev, insuranceType: "" }));
+                    }
+                  }}
                   style={{ width: "auto", margin: 0 }}
                 />
                 <span style={{ fontSize: "13px", fontWeight: 600, color: data.insuranceType === t.value ? "var(--brand)" : "var(--text-secondary)" }}>
@@ -364,13 +716,18 @@ export default function NewPolicyPage() {
               </label>
             ))}
           </div>
+          {fieldErrors.insuranceType && (
+            <div style={{ marginTop: "12px" }}>
+              <FieldError message={fieldErrors.insuranceType} />
+            </div>
+          )}
         </div>
       )}
 
       {/* ── STEP 2: Customer & Insurer ── */}
       {step === 2 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
+          <div style={{ backgroundColor: "var(--bg-card)", border: `1px solid ${fieldErrors.customerId ? "#f87171" : "var(--border)"}`, borderRadius: "10px", padding: "20px" }}>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>Customer</p>
             {data.customerId && data.customerName ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--brand)" }}>
@@ -378,15 +735,27 @@ export default function NewPolicyPage() {
                   <p style={{ fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{data.customerName}</p>
                   <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>Selected</p>
                 </div>
-                <button className="btn-secondary" style={{ padding: "5px 10px", fontSize: "12px" }} onClick={() => setData(prev => ({ ...prev, customerId: "", customerName: "" }))}>Change</button>
+                <button className="btn-secondary" style={{ padding: "5px 10px", fontSize: "12px" }} onClick={() => {
+                  setData(prev => ({ ...prev, customerId: "", customerName: "" }));
+                  if (fieldErrors.customerId) {
+                    setFieldErrors(prev => ({ ...prev, customerId: "" }));
+                  }
+                }}>Change</button>
               </div>
             ) : (
               <div style={{ position: "relative" }}>
                 <input
                   placeholder="Search customer by name or phone..."
                   value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  style={inStyle} onFocus={foc} onBlur={blr}
+                  onChange={(e) => {
+                    setCustomerSearch(e.target.value);
+                    if (fieldErrors.customerId) {
+                      setFieldErrors(prev => ({ ...prev, customerId: "" }));
+                    }
+                  }}
+                  style={inStyle}
+                  onFocus={foc}
+                  onBlur={blr}
                 />
                 {customerResults.length > 0 && (
                   <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10, backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "8px", marginTop: "4px", overflow: "hidden" }}>
@@ -395,7 +764,14 @@ export default function NewPolicyPage() {
                       return (
                         <div
                           key={c.id}
-                          onClick={() => { setData(prev => ({ ...prev, customerId: c.id, customerName: name })); setCustomerSearch(""); setCustomerResults([]); }}
+                          onClick={() => {
+                            setData(prev => ({ ...prev, customerId: c.id, customerName: name }));
+                            setCustomerSearch("");
+                            setCustomerResults([]);
+                            if (fieldErrors.customerId) {
+                              setFieldErrors(prev => ({ ...prev, customerId: "" }));
+                            }
+                          }}
                           style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid var(--border)" }}
                           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
                           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
@@ -409,9 +785,14 @@ export default function NewPolicyPage() {
                 )}
               </div>
             )}
+            {fieldErrors.customerId && (
+              <div style={{ marginTop: "12px" }}>
+                <FieldError message={fieldErrors.customerId} />
+              </div>
+            )}
           </div>
 
-          <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
+          <div style={{ backgroundColor: "var(--bg-card)", border: `1px solid ${fieldErrors.insurerId ? "#f87171" : "var(--border)"}`, borderRadius: "10px", padding: "20px" }}>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>Insurer</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div>
@@ -420,9 +801,16 @@ export default function NewPolicyPage() {
                   value={data.insurerId}
                   onChange={(e) => {
                     if (e.target.value === "manual") setData(prev => ({ ...prev, insurerId: "" }));
-                    else handleInsurerSelect(e.target.value);
+                    else {
+                      handleInsurerSelect(e.target.value);
+                      if (fieldErrors.insurerId) {
+                        setFieldErrors(prev => ({ ...prev, insurerId: "" }));
+                      }
+                    }
                   }}
-                  style={inStyle} onFocus={foc} onBlur={blr}
+                  style={inStyle}
+                  onFocus={foc}
+                  onBlur={blr}
                 >
                   <option value="">Select insurer...</option>
                   {insurers.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
@@ -432,10 +820,27 @@ export default function NewPolicyPage() {
               {!data.insurerId && (
                 <div>
                   <label style={lbStyle}>Insurer Name (Manual)</label>
-                  <input placeholder="Type insurer name..." value={data.insurerNameManual} onChange={(e) => setData(prev => ({ ...prev, insurerNameManual: e.target.value }))} style={inStyle} onFocus={foc} onBlur={blr} />
+                  <input
+                    placeholder="Type insurer name..."
+                    value={data.insurerNameManual}
+                    onChange={(e) => {
+                      setData(prev => ({ ...prev, insurerNameManual: e.target.value }));
+                      if (fieldErrors.insurerId) {
+                        setFieldErrors(prev => ({ ...prev, insurerId: "" }));
+                      }
+                    }}
+                    style={inStyle}
+                    onFocus={foc}
+                    onBlur={blr}
+                  />
                 </div>
               )}
             </div>
+            {fieldErrors.insurerId && (
+              <div style={{ marginTop: "12px" }}>
+                <FieldError message={fieldErrors.insurerId} />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -591,11 +996,14 @@ export default function NewPolicyPage() {
             </div>
             <div style={{ backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)", padding: "16px" }}>
               <p style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "10px" }}>
-                Premium Breakdown (benefits added in next step)
+                Premium Preview (add benefits in next step)
+              </p>
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "10px", fontStyle: "italic" }}>
+                Note: IRA Levy (0.45%) is calculated on Basic Premium + Benefits combined
               </p>
               {[
                 { label: "Basic Premium", value: data.basicPremium },
-                { label: "IRA Levy (0.45%)", value: data.iraLevy },
+                { label: "IRA Levy (0.45% of basic + benefits)", value: data.iraLevy },
                 { label: "Stamp Duty", value: data.stampDuty },
                 { label: "PHCF", value: data.phcf },
               ].map(({ label, value }) => (
@@ -617,11 +1025,11 @@ export default function NewPolicyPage() {
           </p>
           <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "14px" }}>
             Sum Insured: <strong style={{ color: "var(--brand)" }}>{formatKES(data.sumInsured)}</strong>
+            <span style={{ marginLeft: "12px" }}>IRA levy is applied on basic premium + all benefits combined</span>
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {benefits.map((b) => {
               const selected = data.benefits.find(x => x.benefitOptionId === b.id);
-              const bType = BENEFIT_TYPES[b.name] || "custom";
               return (
                 <div
                   key={b.id}
@@ -639,75 +1047,16 @@ export default function NewPolicyPage() {
                     <span style={{ fontSize: "13px", fontWeight: 600, flex: 1, color: selected ? "var(--text-primary)" : "var(--text-secondary)" }}>
                       {b.name}
                     </span>
-                    {selected && bType === "custom" && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>KES</span>
-                        <input
-                          type="number" placeholder="0.00" value={selected.amountKes}
-                          onChange={(e) => updateBenefitField(b.id, "amountKes", e.target.value)}
-                          style={{ width: "120px", padding: "6px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
-                          onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
-                          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
-                        />
-                      </div>
+                    {selected && (
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--brand)" }}>
+                        {parseFloat(selected.amountKes || "0") === 0 &&
+                          (getBenefitType(b.name) === "windscreen" || getBenefitType(b.name) === "entertainment")
+                          ? "Free / enter value"
+                          : formatKES(selected.amountKes || "0")}
+                      </span>
                     )}
                   </div>
-                  {selected && bType === "excess" && (
-                    <div style={{ marginTop: "10px" }}>
-                      <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
-                        Auto-calculated (0.5% of sum insured) — editable
-                      </label>
-                      <input
-                        type="number" value={selected.amountKes}
-                        onChange={(e) => updateBenefitField(b.id, "amountKes", e.target.value)}
-                        style={{ width: "200px", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", color: "var(--brand)", fontSize: "13px", outline: "none", fontWeight: 600 }}
-                      />
-                    </div>
-                  )}
-                  {selected && bType === "windscreen" && (
-                    <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                      <div>
-                        <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Windscreen Value (KES)</label>
-                        <input type="number" placeholder="Enter windscreen value" value={selected.windscreenValue || ""}
-                          onChange={(e) => updateBenefitField(b.id, "windscreenValue", e.target.value)}
-                          style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }} />
-                        <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>≤ KES 50,000 = free · Above: 10%</p>
-                      </div>
-                      <div>
-                        <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Premium (KES)</label>
-                        <input type="number" value={selected.amountKes}
-                          onChange={(e) => updateBenefitField(b.id, "amountKes", e.target.value)}
-                          style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", color: "var(--brand)", fontSize: "13px", outline: "none", fontWeight: 600 }} />
-                      </div>
-                    </div>
-                  )}
-                  {selected && bType === "loss_of_use" && (
-                    <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                      <div>
-                        <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Number of Days</label>
-                        <select value={selected.lossOfUseDays || "10"} onChange={(e) => updateBenefitField(b.id, "lossOfUseDays", e.target.value)}
-                          style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}>
-                          <option value="10">10 days — KES 30,000</option>
-                          <option value="20">20 days — KES 60,000</option>
-                          <option value="30">30 days — KES 90,000</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Premium (KES)</label>
-                        <input type="number" value={selected.amountKes}
-                          onChange={(e) => updateBenefitField(b.id, "amountKes", e.target.value)}
-                          style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", color: "var(--brand)", fontSize: "13px", outline: "none", fontWeight: 600 }} />
-                      </div>
-                    </div>
-                  )}
-                  {selected && bType === "entertainment" && (
-                    <div style={{ marginTop: "10px" }}>
-                      <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Entertainment Unit Premium (KES)</label>
-                      <input type="number" placeholder="Enter premium amount" value={selected.amountKes}
-                        onChange={(e) => updateBenefitField(b.id, "amountKes", e.target.value)}
-                        style={{ width: "200px", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }} />
-                    </div>
-                  )}
+                  {selected && renderBenefitExtra(selected)}
                 </div>
               );
             })}
@@ -729,7 +1078,7 @@ export default function NewPolicyPage() {
               Premium Summary
             </p>
 
-            {/* 1. Basic Premium */}
+            {/* Sum insured */}
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
               <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Sum Insured</span>
               <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{formatKES(data.sumInsured || "0")}</span>
@@ -739,7 +1088,7 @@ export default function NewPolicyPage() {
               <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{formatKES(data.basicPremium || "0")}</span>
             </div>
 
-            {/* 2. Benefits – each listed individually BEFORE levies */}
+            {/* Benefits listed individually */}
             {data.benefits.length > 0 && (
               <>
                 <div style={{ padding: "8px 0 2px" }}>
@@ -750,20 +1099,27 @@ export default function NewPolicyPage() {
                 {data.benefits.map((b) => (
                   <div key={b.benefitOptionId} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0 6px 12px", borderBottom: "1px solid var(--border)" }}>
                     <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>• {b.benefitName}</span>
-                    <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{formatKES(b.amountKes || "0")}</span>
+                    <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>
+                      {parseFloat(b.amountKes || "0") === 0 ? "Free" : formatKES(b.amountKes || "0")}
+                    </span>
                   </div>
                 ))}
               </>
             )}
 
-            {/* 3. Statutory Levies – come AFTER benefits */}
+            {/* Statutory Levies — AFTER benefits */}
             <div style={{ padding: "8px 0 2px", marginTop: "4px" }}>
               <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>
                 Statutory Levies
               </span>
             </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                IRA Levy (0.45% of basic + benefits)
+              </span>
+              <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{formatKES(data.iraLevy || "0")}</span>
+            </div>
             {[
-              { label: "IRA Levy (0.45%)", value: data.iraLevy },
               { label: "Stamp Duty", value: data.stampDuty },
               { label: "PHCF", value: data.phcf },
             ].map(({ label, value }) => (
@@ -845,9 +1201,15 @@ export default function NewPolicyPage() {
         {step < 7 ? (
           <button
             className="btn-primary"
-            disabled={!canProceed()}
             onClick={() => {
-              // Skip vehicle step for non-motor
+              setFieldErrors({});
+              const errors = validateStep(step);
+              if (Object.keys(errors).length > 0) {
+                setFieldErrors(errors);
+                setError("Please fix the errors above before continuing.");
+                return;
+              }
+              setError("");
               if (!isMotor && step === 2) { setStep(4); return; }
               setStep(s => s + 1);
             }}

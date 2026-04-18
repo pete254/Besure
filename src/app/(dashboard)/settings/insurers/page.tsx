@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Plus, Pencil, Trash2, X, Check, AlertTriangle } from "lucide-react";
+import FieldError from "@/components/ui/FieldError";
 
 interface Insurer {
   id: string;
@@ -62,6 +63,7 @@ export default function InsurersPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   async function fetchInsurers() {
     setLoading(true);
@@ -103,6 +105,10 @@ export default function InsurersPage() {
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value, type, checked } = e.target;
     setForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: "" }));
+    }
   }
 
   function focusStyle(e: React.FocusEvent<HTMLInputElement>) {
@@ -113,9 +119,52 @@ export default function InsurersPage() {
   }
 
   async function handleSave() {
-    if (!form.name.trim()) { setError("Insurer name is required"); return; }
-    setSaving(true);
     setError("");
+    setFieldErrors({});
+    const errors: Record<string, string> = {};
+
+    // Validate name
+    if (!form.name.trim()) {
+      errors.name = "Insurer name is required";
+    }
+
+    // Validate commission rate
+    if (form.commissionRate) {
+      const rate = parseFloat(form.commissionRate);
+      if (isNaN(rate) || rate < 0 || rate > 100) {
+        errors.commissionRate = "Commission rate must be between 0% and 100%";
+      }
+    }
+
+    // Validate rate fields
+    ["rateMotorPrivate", "rateMotorCommercial", "ratePsv"].forEach(key => {
+      const val = (form as any)[key];
+      if (val) {
+        const rate = parseFloat(val);
+        if (isNaN(rate) || rate <= 0 || rate > 50) {
+          errors[key] = "Rate must be between 0.01% and 50%";
+        }
+      }
+    });
+
+    // Validate minimum premium fields
+    ["minPremiumPrivate", "minPremiumCommercial", "minPremiumPsv"].forEach(key => {
+      const val = (form as any)[key];
+      if (val) {
+        const premium = parseFloat(val);
+        if (isNaN(premium) || premium < 0) {
+          errors[key] = "Minimum premium must be 0 or greater";
+        }
+      }
+    });
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Please fix the errors below and try again.");
+      return;
+    }
+
+    setSaving(true);
     try {
       const url = editTarget ? `/api/insurers/${editTarget.id}` : "/api/insurers";
       const method = editTarget ? "PUT" : "POST";
@@ -262,45 +311,53 @@ export default function InsurersPage() {
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div>
+              <div data-error={!!fieldErrors.name || undefined}>
                 <label style={labelStyle}>Insurer Name *</label>
-                <input name="name" value={form.name} onChange={handleChange} placeholder="e.g. Jubilee Insurance" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                <input name="name" value={form.name} onChange={handleChange} placeholder="e.g. Jubilee Insurance" style={{ ...inputStyle, borderColor: fieldErrors.name ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.name ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.name ? "#f87171" : "var(--border)"; }} />
+                <FieldError message={fieldErrors.name} />
               </div>
 
-              <div>
+              <div data-error={!!fieldErrors.commissionRate || undefined}>
                 <label style={labelStyle}>Commission Rate (%)</label>
-                <input name="commissionRate" value={form.commissionRate} onChange={handleChange} placeholder="e.g. 12.50" type="number" step="0.01" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                <input name="commissionRate" value={form.commissionRate} onChange={handleChange} placeholder="e.g. 12.50" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.commissionRate ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.commissionRate ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.commissionRate ? "#f87171" : "var(--border)"; }} />
+                <FieldError message={fieldErrors.commissionRate} />
               </div>
 
               <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "4px 0 0" }}>Default Rates (%)</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-                <div>
+                <div data-error={!!fieldErrors.rateMotorPrivate || undefined}>
                   <label style={labelStyle}>Motor Private</label>
-                  <input name="rateMotorPrivate" value={form.rateMotorPrivate} onChange={handleChange} placeholder="4.00" type="number" step="0.01" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                  <input name="rateMotorPrivate" value={form.rateMotorPrivate} onChange={handleChange} placeholder="4.00" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.rateMotorPrivate ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.rateMotorPrivate ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.rateMotorPrivate ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.rateMotorPrivate} />
                 </div>
-                <div>
+                <div data-error={!!fieldErrors.rateMotorCommercial || undefined}>
                   <label style={labelStyle}>Commercial</label>
-                  <input name="rateMotorCommercial" value={form.rateMotorCommercial} onChange={handleChange} placeholder="4.50" type="number" step="0.01" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                  <input name="rateMotorCommercial" value={form.rateMotorCommercial} onChange={handleChange} placeholder="4.50" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.rateMotorCommercial ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.rateMotorCommercial ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.rateMotorCommercial ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.rateMotorCommercial} />
                 </div>
-                <div>
+                <div data-error={!!fieldErrors.ratePsv || undefined}>
                   <label style={labelStyle}>PSV / Matatu</label>
-                  <input name="ratePsv" value={form.ratePsv} onChange={handleChange} placeholder="5.00" type="number" step="0.01" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                  <input name="ratePsv" value={form.ratePsv} onChange={handleChange} placeholder="5.00" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.ratePsv ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.ratePsv ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.ratePsv ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.ratePsv} />
                 </div>
               </div>
 
               <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "4px 0 0" }}>Minimum Premiums (KES)</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-                <div>
+                <div data-error={!!fieldErrors.minPremiumPrivate || undefined}>
                   <label style={labelStyle}>Motor Private</label>
-                  <input name="minPremiumPrivate" value={form.minPremiumPrivate} onChange={handleChange} placeholder="7500" type="number" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                  <input name="minPremiumPrivate" value={form.minPremiumPrivate} onChange={handleChange} placeholder="7500" type="number" style={{ ...inputStyle, borderColor: fieldErrors.minPremiumPrivate ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.minPremiumPrivate ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.minPremiumPrivate ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.minPremiumPrivate} />
                 </div>
-                <div>
+                <div data-error={!!fieldErrors.minPremiumCommercial || undefined}>
                   <label style={labelStyle}>Commercial</label>
-                  <input name="minPremiumCommercial" value={form.minPremiumCommercial} onChange={handleChange} placeholder="10000" type="number" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                  <input name="minPremiumCommercial" value={form.minPremiumCommercial} onChange={handleChange} placeholder="10000" type="number" style={{ ...inputStyle, borderColor: fieldErrors.minPremiumCommercial ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.minPremiumCommercial ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.minPremiumCommercial ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.minPremiumCommercial} />
                 </div>
-                <div>
+                <div data-error={!!fieldErrors.minPremiumPsv || undefined}>
                   <label style={labelStyle}>PSV / Matatu</label>
-                  <input name="minPremiumPsv" value={form.minPremiumPsv} onChange={handleChange} placeholder="12000" type="number" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                  <input name="minPremiumPsv" value={form.minPremiumPsv} onChange={handleChange} placeholder="12000" type="number" style={{ ...inputStyle, borderColor: fieldErrors.minPremiumPsv ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.minPremiumPsv ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.minPremiumPsv ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.minPremiumPsv} />
                 </div>
               </div>
 

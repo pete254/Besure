@@ -6,7 +6,7 @@ dotenv.config({ path: ".env.local" });
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { Pool } from "@neondatabase/serverless";
 import * as schema from "./schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
 const db = drizzle(pool, { schema });
@@ -114,8 +114,14 @@ async function seed() {
   // ─── BENEFIT OPTIONS ────────────────────────────────────────
   console.log("\nSeeding benefit options...");
 
+  // Deactivate old/unwanted benefits instead of deleting (due to foreign keys)
+  await db
+    .update(schema.benefitOptions)
+    .set({ isActive: false })
+    .where(inArray(schema.benefitOptions.name, ["Courtesy Car", "Loss of Use / Courtesy car"]));
+  console.log("Deactivated old benefits");
+
   const benefitData: schema.NewBenefitOption[] = [
-    { name: "Courtesy Car", isActive: true, sortOrder: 1 },
     { name: "Anti-Violence / Political Violence Cover", isActive: true, sortOrder: 2 },
     { name: "Excess Protector", isActive: true, sortOrder: 3 },
     { name: "Windscreen Cover", isActive: true, sortOrder: 4 },

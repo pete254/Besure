@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save } from "lucide-react";
+import FieldError from "@/components/ui/FieldError";
+import { validateRequired, validateDate } from "@/lib/validation";
 
 interface PolicyOption {
   policy: { id: string; policyNumber?: string | null; insuranceType: string };
@@ -15,8 +17,8 @@ interface PolicyOption {
 
 const NATURE_OPTIONS = ["Accident", "Theft", "Fire", "Flood", "Vandalism", "Other"];
 
-// Component for inline error messages
-function FieldError({ message }: { message?: string }) {
+// Component for inline error messages - kept for backwards compatibility
+function FieldErrorLegacy({ message }: { message?: string }) {
   if (!message) return null;
   return (
     <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px", fontWeight: 500 }}>
@@ -55,14 +57,48 @@ export default function NewClaimPage() {
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     const { name, value, type } = e.target;
     setForm(prev => ({ ...prev, [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : value }));
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: "" }));
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.policyId) { setError("Please select a policy"); setFieldErrors({ policyId: "Please select a policy" }); return; }
-    if (!form.dateOfLoss) { setError("Date of loss is required"); setFieldErrors({ dateOfLoss: "Date of loss is required" }); return; }
     setError("");
     setFieldErrors({});
+
+    // Validate required fields
+    const errors: Record<string, string> = {};
+    if (!form.policyId) {
+      errors.policyId = "Please select the policy this claim is linked to";
+    }
+    const dolErr = validateDate(form.dateOfLoss, "Date of loss");
+    if (dolErr) errors.dateOfLoss = dolErr;
+    const drErr = validateDate(form.dateReported, "Date reported");
+    if (drErr) errors.dateReported = drErr;
+    if (form.dateOfLoss && form.dateReported && form.dateReported < form.dateOfLoss) {
+      errors.dateReported = "Date reported cannot be before the date of loss";
+    }
+    if (!form.natureOfLoss) {
+      errors.natureOfLoss = "Please select the nature of loss";
+    }
+    if (form.thirdPartyInvolved && !form.thirdPartyName?.trim()) {
+      errors.thirdPartyName = "Please enter the third party's name";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Please fix the errors below before continuing.");
+      setTimeout(() => {
+        const firstError = document.querySelector("[data-error='true']");
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 50);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -74,12 +110,14 @@ export default function NewClaimPage() {
         location: form.location || null,
         policeAbstractNumber: form.policeAbstractNumber || null,
         thirdPartyInvolved: form.thirdPartyInvolved,
-        thirdPartyDetails: form.thirdPartyInvolved ? {
-          name: form.thirdPartyName,
-          phone: form.thirdPartyPhone,
-          regNo: form.thirdPartyRegNo,
-          insurer: form.thirdPartyInsurer,
-        } : null,
+        thirdPartyDetails: form.thirdPartyInvolved
+          ? {
+              name: form.thirdPartyName,
+              phone: form.thirdPartyPhone,
+              regNo: form.thirdPartyRegNo,
+              insurer: form.thirdPartyInsurer,
+            }
+          : null,
         notes: form.notes || null,
       };
 
@@ -93,12 +131,12 @@ export default function NewClaimPage() {
       if (!res.ok) {
         // Handle Zod validation errors with field paths
         if (data.issues && Array.isArray(data.issues)) {
-          const errors: Record<string, string> = {};
+          const apiErrors: Record<string, string> = {};
           data.issues.forEach((issue: any) => {
             const fieldPath = issue.path?.join(".") || "form";
-            errors[fieldPath] = issue.message || "Invalid value";
+            apiErrors[fieldPath] = issue.message || "Invalid value";
           });
-          setFieldErrors(errors);
+          setFieldErrors(apiErrors);
           setError("Please fix the errors below and try again.");
         } else {
           setError(data.error || "Failed to create claim");
@@ -128,25 +166,53 @@ export default function NewClaimPage() {
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
         {/* Policy selection */}
-        <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
+        <div style={{ backgroundColor: "var(--bg-card)", border: `1px solid ${fieldErrors.policyId ? "#f87171" : "var(--border)"}`, borderRadius: "10px", padding: "20px" }}>
           <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
             Link to Policy
           </p>
-          <div>
+          <div data-error={!!fieldErrors.policyId || undefined}>
             <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Select Policy *
             </label>
-            <select name="policyId" value={form.policyId} onChange={handleChange}
-              style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
-              onFocus={(e) => { (e.target as HTMLSelectElement).style.borderColor = "var(--brand)"; }}
-              onBlur={(e) => { (e.target as HTMLSelectElement).style.borderColor = "var(--border)"; }}>
+            <select
+              name="policyId"
+              value={form.policyId}
+              onChange={handleChange}
+              style={{
+                width: "100%",
+                padding: "9px 12px",
+                backgroundColor: "var(--bg-app)",
+                border: `1px solid ${fieldErrors.policyId ? "#f87171" : "var(--border)"}`,
+                borderRadius: "8px",
+                color: "var(--text-primary)",
+                fontSize: "13px",
+                outline: "none",
+              }}
+              onFocus={(e) => {
+                (e.target as HTMLSelectElement).style.borderColor = fieldErrors.policyId
+                  ? "#f87171"
+                  : "var(--brand)";
+              }}
+              onBlur={(e) => {
+                (e.target as HTMLSelectElement).style.borderColor = fieldErrors.policyId
+                  ? "#f87171"
+                  : "var(--border)";
+              }}
+            >
               <option value="">Select a policy...</option>
               {policies.map(p => {
-                const name = p.customer.customerType === "Company" ? p.customer.companyName : `${p.customer.firstName} ${p.customer.lastName}`;
+                const name =
+                  p.customer.customerType === "Company"
+                    ? p.customer.companyName
+                    : `${p.customer.firstName} ${p.customer.lastName}`;
                 const label = p.vehicle
                   ? `${name} — ${p.vehicle.make} ${p.vehicle.model} (${p.vehicle.regNo})`
                   : `${name} — ${p.policy.insuranceType}`;
-                return <option key={p.policy.id} value={p.policy.id}>{label}</option>;
+                return (
+                  <option key={p.policy.id} value={p.policy.id}>
+                    {label}
+                  </option>
+                );
               })}
             </select>
             <FieldError message={fieldErrors.policyId} />

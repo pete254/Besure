@@ -5,6 +5,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Plus, Pencil, Trash2, X, Check, AlertTriangle, Search, MapPin, Phone } from "lucide-react";
+import FieldError from "@/components/ui/FieldError";
+import { validatePhone } from "@/lib/validation";
 
 interface Garage {
   id: string;
@@ -51,6 +53,7 @@ export default function GaragesPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   async function fetchGarages(q = "") {
     setLoading(true);
@@ -87,6 +90,10 @@ export default function GaragesPage() {
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value, type } = e.target;
     setForm((prev) => ({ ...prev, [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : value }));
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: "" }));
+    }
   }
 
   function focusStyle(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
@@ -97,9 +104,30 @@ export default function GaragesPage() {
   }
 
   async function handleSave() {
-    if (!form.name.trim()) { setError("Garage name is required"); return; }
-    setSaving(true);
     setError("");
+    setFieldErrors({});
+    const errors: Record<string, string> = {};
+
+    // Validate garage name
+    if (!form.name.trim()) {
+      errors.name = "Garage name is required";
+    }
+
+    // Validate phone if provided
+    if (form.phone) {
+      const phoneErr = validatePhone(form.phone);
+      if (phoneErr) {
+        errors.phone = phoneErr;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Please fix the errors below and try again.");
+      return;
+    }
+
+    setSaving(true);
     try {
       const url = editTarget ? `/api/garages/${editTarget.id}` : "/api/garages";
       const method = editTarget ? "PUT" : "POST";
@@ -233,9 +261,10 @@ export default function GaragesPage() {
             </div>
             {error && <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "12px", marginBottom: "14px" }}>{error}</div>}
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div>
+              <div data-error={!!fieldErrors.name || undefined}>
                 <label style={labelStyle}>Garage Name *</label>
-                <input name="name" value={form.name} onChange={handleChange} placeholder="e.g. Nairobi Auto Repairs" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                <input name="name" value={form.name} onChange={handleChange} placeholder="e.g. Nairobi Auto Repairs" style={{ ...inputStyle, borderColor: fieldErrors.name ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.name ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.name ? "#f87171" : "var(--border)"; }} />
+                <FieldError message={fieldErrors.name} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
@@ -253,9 +282,10 @@ export default function GaragesPage() {
                   <label style={labelStyle}>Contact Person</label>
                   <input name="contactPerson" value={form.contactPerson} onChange={handleChange} placeholder="Name" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
                 </div>
-                <div>
+                <div data-error={!!fieldErrors.phone || undefined}>
                   <label style={labelStyle}>Phone</label>
-                  <input name="phone" value={form.phone} onChange={handleChange} placeholder="0700 000 000" style={inputStyle} onFocus={focusStyle} onBlur={blurStyle} />
+                  <input name="phone" value={form.phone} onChange={handleChange} placeholder="0700 000 000" style={{ ...inputStyle, borderColor: fieldErrors.phone ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.phone ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.phone ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.phone} />
                 </div>
               </div>
               <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>

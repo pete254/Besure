@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Plus, Pencil, Trash2, X, Check, AlertTriangle, GripVertical } from "lucide-react";
+import FieldError from "@/components/ui/FieldError";
 
 interface Benefit {
   id: string;
@@ -29,6 +30,7 @@ export default function BenefitsPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   async function fetchBenefits() {
     setLoading(true);
@@ -58,7 +60,26 @@ export default function BenefitsPage() {
   }
 
   async function handleSave() {
-    if (!name.trim()) { setError("Benefit name is required"); return; }
+    setError("");
+    setFieldErrors({});
+    const errors: Record<string, string> = {};
+
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+      errors.name = "Benefit name is required";
+    } else if (trimmedName.length < 3) {
+      errors.name = "Benefit name must be at least 3 characters";
+    } else if (trimmedName.length > 100) {
+      errors.name = "Benefit name must be under 100 characters";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Please fix the errors below and try again.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -67,7 +88,7 @@ export default function BenefitsPage() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), sortOrder: editTarget?.sortOrder ?? benefits.length + 1 }),
+        body: JSON.stringify({ name: trimmedName, sortOrder: editTarget?.sortOrder ?? benefits.length + 1 }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Failed to save"); return; }
@@ -182,12 +203,13 @@ export default function BenefitsPage() {
               <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }}><X size={16} /></button>
             </div>
             {error && <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "12px", marginBottom: "14px" }}>{error}</div>}
-            <div>
+            <div data-error={!!fieldErrors.name || undefined}>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Benefit Name *</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Windscreen Cover" style={inputStyle}
-                onFocus={(e) => ((e.target as HTMLElement).style.borderColor = "var(--brand)")}
-                onBlur={(e) => ((e.target as HTMLElement).style.borderColor = "var(--border)")}
+              <input value={name} onChange={(e) => { setName(e.target.value); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: "" })); }} placeholder="e.g. Windscreen Cover" style={{ ...inputStyle, borderColor: fieldErrors.name ? "#f87171" : "1px solid var(--border)" }}
+                onFocus={(e) => ((e.target as HTMLElement).style.borderColor = fieldErrors.name ? "#f87171" : "var(--brand)")}
+                onBlur={(e) => ((e.target as HTMLElement).style.borderColor = fieldErrors.name ? "#f87171" : "var(--border)")}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }} />
+              <FieldError message={fieldErrors.name} />
             </div>
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "16px" }}>
               <button onClick={() => setShowForm(false)} style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
