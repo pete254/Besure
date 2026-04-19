@@ -1,4 +1,5 @@
 // src/app/api/policies/route.ts
+// Updated: new insurance types including Motor - Private Comp and commercial variants
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -8,9 +9,17 @@ import { z } from "zod";
 
 const createPolicySchema = z.object({
   insuranceType: z.enum([
-    "Motor - Private", "Motor - Commercial", "Motor - PSV / Matatu",
-    "Fire & Perils", "Domestic Package", "Medical / Health",
-    "Life Insurance", "Travel Insurance",
+    "Motor - Private Comp",
+    "Motor - Commercial",
+    "Motor - PSV / Matatu",
+    "Motor - Commercial Institutional",
+    "Motor - Commercial TSV",
+    "Motor - Commercial Third Party",
+    "Fire & Perils",
+    "Domestic Package",
+    "Medical / Health",
+    "Life Insurance",
+    "Travel Insurance",
   ], { message: "Please select a valid insurance type" }),
   customerId: z.string().uuid("Please select a valid customer"),
   insurerId: z.string().uuid().optional().nullable(),
@@ -28,7 +37,7 @@ const createPolicySchema = z.object({
     bodyType: z.string().optional().nullable(),
     colour: z.string().optional().nullable(),
   }).optional().nullable(),
-  coverType: z.enum(["Comprehensive", "TPO", "TPFT"], { message: "Please select a valid cover type" }).optional().nullable(),
+  coverType: z.enum(["Comprehensive", "TPO", "TPFT"]).optional().nullable(),
   sumInsured: z.string().optional().nullable(),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
@@ -38,7 +47,7 @@ const createPolicySchema = z.object({
   iraLevy: z.string().optional().nullable(),
   trainingLevy: z.string().optional().nullable(),
   stampDuty: z.string().default("40"),
-  phcf: z.string().default("100"),
+  phcf: z.string().default("0"),
   benefits: z.array(z.object({
     benefitOptionId: z.string().optional().nullable(),
     benefitName: z.string(),
@@ -51,6 +60,16 @@ const createPolicySchema = z.object({
   ipfLoanReference: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
+
+// Which insurance types count as "motor"
+const MOTOR_TYPES = [
+  "Motor - Private Comp",
+  "Motor - Commercial",
+  "Motor - PSV / Matatu",
+  "Motor - Commercial Institutional",
+  "Motor - Commercial TSV",
+  "Motor - Commercial Third Party",
+];
 
 // GET /api/policies
 export async function GET(req: NextRequest) {
@@ -104,7 +123,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = parsed.data;
-    const isMotor = data.insuranceType.startsWith("Motor");
+    const isMotor = MOTOR_TYPES.includes(data.insuranceType);
 
     // Create policy
     const [newPolicy] = await db.insert(policies).values({
@@ -175,22 +194,20 @@ export async function POST(req: NextRequest) {
       });
     } else if (data.paymentMode === "2 Installments") {
       const half = (total / 2).toFixed(2);
-      const date1 = data.startDate;
       const date2 = new Date(data.startDate);
       date2.setDate(date2.getDate() + 30);
       await db.insert(payments).values([
-        { policyId: newPolicy.id, installmentNumber: 1, totalInstallments: 2, amountDue: half, dueDate: date1, status: "pending" },
+        { policyId: newPolicy.id, installmentNumber: 1, totalInstallments: 2, amountDue: half, dueDate: data.startDate, status: "pending" },
         { policyId: newPolicy.id, installmentNumber: 2, totalInstallments: 2, amountDue: half, dueDate: date2.toISOString().split("T")[0], status: "pending" },
       ]);
     } else if (data.paymentMode === "3 Installments") {
       const third1 = (total / 3).toFixed(2);
       const third2 = (total / 3).toFixed(2);
       const third3 = (total - parseFloat(third1) - parseFloat(third2)).toFixed(2);
-      const date1 = data.startDate;
       const date2 = new Date(data.startDate); date2.setDate(date2.getDate() + 30);
       const date3 = new Date(data.startDate); date3.setDate(date3.getDate() + 60);
       await db.insert(payments).values([
-        { policyId: newPolicy.id, installmentNumber: 1, totalInstallments: 3, amountDue: third1, dueDate: date1, status: "pending" },
+        { policyId: newPolicy.id, installmentNumber: 1, totalInstallments: 3, amountDue: third1, dueDate: data.startDate, status: "pending" },
         { policyId: newPolicy.id, installmentNumber: 2, totalInstallments: 3, amountDue: third2, dueDate: date2.toISOString().split("T")[0], status: "pending" },
         { policyId: newPolicy.id, installmentNumber: 3, totalInstallments: 3, amountDue: third3, dueDate: date3.toISOString().split("T")[0], status: "pending" },
       ]);

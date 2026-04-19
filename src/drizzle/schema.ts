@@ -1,5 +1,5 @@
 // BeSure Insurance Solutions — Drizzle ORM Schema
-// Neon DB (Serverless PostgreSQL) | Version 2.1
+// Neon DB (Serverless PostgreSQL) | Version 2.2
 // Run: npx drizzle-kit push  to apply to Neon
 
 import {
@@ -23,10 +23,19 @@ export const customerDocTypeEnum = pgEnum("customer_doc_type", [
   "ID", "PASSPORT", "KRA", "OTHER",
 ]);
 
+// Updated: renamed Motor - Private → Motor - Private Comp, added 3 new commercial types
 export const insuranceTypeEnum = pgEnum("insurance_type", [
-  "Motor - Private", "Motor - Commercial", "Motor - PSV / Matatu",
-  "Fire & Perils", "Domestic Package", "Medical / Health",
-  "Life Insurance", "Travel Insurance",
+  "Motor - Private Comp",
+  "Motor - Commercial",
+  "Motor - PSV / Matatu",
+  "Motor - Commercial Institutional",
+  "Motor - Commercial TSV",
+  "Motor - Commercial Third Party",
+  "Fire & Perils",
+  "Domestic Package",
+  "Medical / Health",
+  "Life Insurance",
+  "Travel Insurance",
 ]);
 
 export const coverTypeEnum = pgEnum("cover_type", ["Comprehensive", "TPO", "TPFT"]);
@@ -121,9 +130,9 @@ export const customers = pgTable(
     phone: varchar("phone", { length: 20 }).notNull(),
     email: varchar("email", { length: 255 }),
     idNumber: varchar("id_number", { length: 50 }),
-    idNumberValue: varchar("id_number_value", { length: 100 }), // text value alternative
+    idNumberValue: varchar("id_number_value", { length: 100 }),
     kraPin: varchar("kra_pin", { length: 50 }),
-    kraPinValue: varchar("kra_pin_value", { length: 100 }), // text value alternative
+    kraPinValue: varchar("kra_pin_value", { length: 100 }),
     dateOfBirth: date("date_of_birth"),
     gender: genderEnum("gender"),
     county: varchar("county", { length: 100 }),
@@ -137,7 +146,6 @@ export const customers = pgTable(
     companyEmail: varchar("company_email", { length: 255 }),
     companyPhone: varchar("company_phone", { length: 20 }),
 
-    // Company documents — each has optional file URL and optional text value
     certOfIncorporationUrl: text("cert_of_incorporation_url"),
     certOfIncorporationBlobKey: text("cert_of_incorporation_blob_key"),
     certOfIncorporationValue: varchar("cert_of_incorporation_value", { length: 100 }),
@@ -150,8 +158,6 @@ export const customers = pgTable(
     companyKraPinBlobKey: text("company_kra_pin_blob_key"),
     companyKraPinValue: varchar("company_kra_pin_value", { length: 100 }),
 
-    // Directors stored as JSONB array:
-    // [{ name, idNumber, idNumberValue, kraPin, kraPinValue, idFileUrl, pinFileUrl }]
     directors: jsonb("directors"),
 
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -180,7 +186,7 @@ export const customerDocuments = pgTable("customer_documents", {
   docType: customerDocTypeEnum("doc_type").notNull(),
   fileUrl: text("file_url"),
   blobKey: text("blob_key"),
-  docValue: varchar("doc_value", { length: 255 }), // text value alternative to file upload
+  docValue: varchar("doc_value", { length: 255 }),
   docLabel: varchar("doc_label", { length: 255 }),
   status: docStatusEnum("status").notNull().default("Pending"),
   uploadedAt: timestamp("uploaded_at"),
@@ -228,10 +234,10 @@ export const benefitOptions = pgTable("benefit_options", {
   name: varchar("name", { length: 255 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
-  // Auto-calculation hints stored as JSONB
-  // e.g. { type: "percentage", rate: 0.5 } for excess protector
-  // { type: "windscreen" } for windscreen
-  // { type: "loss_of_use", dailyRate: 3000, options: [10,20,30] }
+  // Which insurance type groups this benefit applies to:
+  // "private" | "commercial" | "both"
+  applicableTo: varchar("applicable_to", { length: 50 }).notNull().default("both"),
+  // Auto-calculation config stored as JSONB
   calcConfig: jsonb("calc_config"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -326,7 +332,6 @@ export const vehiclesRelations = relations(vehicles, ({ one }) => ({
 
 // ─────────────────────────────────────────────
 // POLICY BENEFITS
-// Store extra config (e.g. windscreen value, loss of use days) in metaJson
 // ─────────────────────────────────────────────
 
 export const policyBenefits = pgTable("policy_benefits", {
@@ -335,7 +340,6 @@ export const policyBenefits = pgTable("policy_benefits", {
   benefitOptionId: uuid("benefit_option_id").references(() => benefitOptions.id),
   benefitName: varchar("benefit_name", { length: 255 }).notNull(),
   amountKes: numeric("amount_kes", { precision: 14, scale: 2 }).notNull(),
-  // Extra data: windscreen value, loss of use days, etc.
   metaJson: jsonb("meta_json"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -431,7 +435,7 @@ export const policyDocuments = pgTable("policy_documents", {
   status: policyDocStatusEnum("status").notNull().default("Pending"),
   fileUrl: text("file_url"),
   blobKey: text("blob_key"),
-  docValue: varchar("doc_value", { length: 255 }), // text value alternative
+  docValue: varchar("doc_value", { length: 255 }),
   receivedDate: date("received_date"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -530,7 +534,6 @@ export const claimsRelations = relations(claims, ({ one, many }) => ({
 
 // ─────────────────────────────────────────────
 // CLAIM DOCUMENTS
-// Each document has: status, optional file upload, optional text value
 // ─────────────────────────────────────────────
 
 export const claimDocuments = pgTable("claim_documents", {
@@ -541,7 +544,7 @@ export const claimDocuments = pgTable("claim_documents", {
   status: policyDocStatusEnum("status").notNull().default("Pending"),
   fileUrl: text("file_url"),
   blobKey: text("blob_key"),
-  docValue: varchar("doc_value", { length: 255 }), // text value alternative
+  docValue: varchar("doc_value", { length: 255 }),
   receivedDate: date("received_date"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -575,17 +578,17 @@ export const garageUpdatesRelations = relations(garageUpdates, ({ one }) => ({
 }));
 
 // ─────────────────────────────────────────────
-// DRAFTS — Wizard/Form State Persistence
+// DRAFTS
 // ─────────────────────────────────────────────
 
 export const drafts = pgTable("drafts", {
   id: uuid("id").primaryKey().defaultRandom(),
-  draftType: varchar("draft_type", { length: 50 }).notNull(), // "policy" | "claim"
-  draftKey: varchar("draft_key", { length: 100 }).notNull(),  // e.g. "policy-new"
+  draftType: varchar("draft_type", { length: 50 }).notNull(),
+  draftKey: varchar("draft_key", { length: 100 }).notNull(),
   sessionId: varchar("session_id", { length: 100 }),
-  data: text("data").notNull(),                                // JSON stringified wizard state
-  step: varchar("step", { length: 10 }),                       // current wizard step number
-  label: varchar("label", { length: 255 }),                    // friendly display label
+  data: text("data").notNull(),
+  step: varchar("step", { length: 10 }),
+  label: varchar("label", { length: 255 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   expiresAt: timestamp("expires_at"),

@@ -1,6 +1,7 @@
-// BeSure Insurance Solutions — Database Seed
-// Run: npx tsx drizzle/seed.ts
-// Seeds: insurers, benefit options, default admin user
+// BeSure Insurance Solutions — Database Seed v2.2
+// Run: npx tsx src/drizzle/seed.ts
+// Seeds: insurers, benefit options (per insurance type group), default admin user
+
 import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 import { drizzle } from "drizzle-orm/neon-serverless";
@@ -12,7 +13,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
 const db = drizzle(pool, { schema });
 
 async function seed() {
-  console.log("🌱 Seeding BeSure database...\n");
+  console.log("🌱 Seeding BeSure database v2.2...\n");
 
   // ─── INSURERS ───────────────────────────────────────────────
   console.log("Seeding insurers...");
@@ -114,43 +115,148 @@ async function seed() {
   // ─── BENEFIT OPTIONS ────────────────────────────────────────
   console.log("\nSeeding benefit options...");
 
-  // Deactivate old/unwanted benefits instead of deleting (due to foreign keys)
+  // First deactivate ALL existing benefits — we'll re-seed cleanly
   await db
     .update(schema.benefitOptions)
-    .set({ isActive: false })
-    .where(inArray(schema.benefitOptions.name, ["Courtesy Car", "Loss of Use / Courtesy car"]));
-  console.log("Deactivated old benefits");
+    .set({ isActive: false });
+  console.log("  Deactivated all existing benefits for clean re-seed");
 
-  const benefitData: schema.NewBenefitOption[] = [
-    { name: "Anti-Violence / Political Violence Cover", isActive: true, sortOrder: 2 },
-    { name: "Excess Protector", isActive: true, sortOrder: 3 },
-    { name: "Windscreen Cover", isActive: true, sortOrder: 4 },
-    { name: "Personal Accident - Driver", isActive: true, sortOrder: 5 },
-    { name: "Personal Accident - Passengers", isActive: true, sortOrder: 6 },
-    { name: "Medical Expenses Extension", isActive: true, sortOrder: 7 },
-    { name: "Loss of Use / Car Hire", isActive: true, sortOrder: 8 },
-    { name: "Third Party Property Damage Increase", isActive: true, sortOrder: 9 },
-    { name: "Riot & Strike Cover", isActive: true, sortOrder: 10 },
+  // ── PRIVATE COMP benefits (applicableTo: "private") ──────────
+  // Political Violence Cover — 0.25% of value
+  // Excess Protector — 0.25% of value
+  // Windscreen Cover — default 50000, editable
+  // Personal Accident (driver) — default 5000
+  // Loss of Use / Car Hire — 10d=3000, 20d=6000, 30d=9000
+  // Infotainment Unit — default 50000, editable
+
+  const privateCommonBenefits: schema.NewBenefitOption[] = [
+    {
+      name: "Political Violence Cover",
+      isActive: true,
+      sortOrder: 1,
+      applicableTo: "private",
+      calcConfig: { type: "percentage", rate: 0.0025, label: "0.25% of sum insured" },
+    },
+    {
+      name: "Excess Protector",
+      isActive: true,
+      sortOrder: 2,
+      applicableTo: "private",
+      calcConfig: { type: "percentage", rate: 0.0025, label: "0.25% of sum insured" },
+    },
+    {
+      name: "Windscreen Cover",
+      isActive: true,
+      sortOrder: 3,
+      applicableTo: "private",
+      calcConfig: { type: "windscreen", defaultValue: 50000 },
+    },
+    {
+      name: "Personal Accident",
+      isActive: true,
+      sortOrder: 4,
+      applicableTo: "private",
+      calcConfig: { type: "fixed", defaultAmount: 5000 },
+    },
+    {
+      name: "Loss of Use / Car Hire",
+      isActive: true,
+      sortOrder: 5,
+      applicableTo: "private",
+      calcConfig: { type: "loss_of_use", tiers: { 10: 3000, 20: 6000, 30: 9000 } },
+    },
+    {
+      name: "Infotainment Unit",
+      isActive: true,
+      sortOrder: 6,
+      applicableTo: "private",
+      calcConfig: { type: "infotainment", defaultValue: 50000 },
+    },
   ];
 
-  for (const benefit of benefitData) {
+  // ── COMMERCIAL / PSV / INSTITUTIONAL / TSV benefits (applicableTo: "commercial") ──
+  // Political Violence Cover — 0.35% of value
+  // Excess Protector — 0.5% of value
+  // Windscreen Cover — default 50000, editable
+  // Personal Accident (driver) — default 5000
+  // PLL — default 1000, editable
+  // Entertainment Unit — default 50000, editable
+
+  const commercialBenefits: schema.NewBenefitOption[] = [
+    {
+      name: "Political Violence Cover",
+      isActive: true,
+      sortOrder: 1,
+      applicableTo: "commercial",
+      calcConfig: { type: "percentage", rate: 0.0035, label: "0.35% of sum insured" },
+    },
+    {
+      name: "Excess Protector",
+      isActive: true,
+      sortOrder: 2,
+      applicableTo: "commercial",
+      calcConfig: { type: "percentage", rate: 0.005, label: "0.5% of sum insured" },
+    },
+    {
+      name: "Windscreen Cover",
+      isActive: true,
+      sortOrder: 3,
+      applicableTo: "commercial",
+      calcConfig: { type: "windscreen", defaultValue: 50000 },
+    },
+    {
+      name: "Personal Accident",
+      isActive: true,
+      sortOrder: 4,
+      applicableTo: "commercial",
+      calcConfig: { type: "fixed", defaultAmount: 5000 },
+    },
+    {
+      name: "PLL",
+      isActive: true,
+      sortOrder: 5,
+      applicableTo: "commercial",
+      calcConfig: { type: "fixed_editable", defaultAmount: 1000 },
+    },
+    {
+      name: "Entertainment Unit",
+      isActive: true,
+      sortOrder: 6,
+      applicableTo: "commercial",
+      calcConfig: { type: "entertainment", defaultValue: 50000 },
+    },
+  ];
+
+  for (const benefit of [...privateCommonBenefits, ...commercialBenefits]) {
+    // Check if a matching active benefit already exists (name + applicableTo)
     const existing = await db
       .select()
       .from(schema.benefitOptions)
       .where(eq(schema.benefitOptions.name, benefit.name));
 
-    if (existing.length === 0) {
-      await db.insert(schema.benefitOptions).values(benefit);
-      console.log(`  ✅ ${benefit.name}`);
+    // Find exact match by name + applicableTo
+    const exactMatch = existing.find(
+      (e) => (e as any).applicableTo === benefit.applicableTo
+    );
+
+    if (exactMatch) {
+      await db
+        .update(schema.benefitOptions)
+        .set({
+          isActive: true,
+          sortOrder: benefit.sortOrder,
+          calcConfig: benefit.calcConfig as any,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.benefitOptions.id, exactMatch.id));
+      console.log(`  ♻️  Updated: ${benefit.name} (${benefit.applicableTo})`);
     } else {
-      console.log(`  ⏭️  ${benefit.name} already exists`);
+      await db.insert(schema.benefitOptions).values(benefit);
+      console.log(`  ✅ ${benefit.name} (${benefit.applicableTo})`);
     }
   }
 
   // ─── DEFAULT ADMIN USER ─────────────────────────────────────
-  // ⚠️  CHANGE password after first login!
-  // Password is hashed with bcrypt — replace hash below with:
-  // import { hash } from "bcryptjs"; const hash = await hash("yourpassword", 12);
   console.log("\nSeeding default admin user...");
 
   const adminEmail = "admin@besure.co.ke";
@@ -161,7 +267,6 @@ async function seed() {
 
   if (existingAdmin.length === 0) {
     // Default password: BeSure2025! — CHANGE IMMEDIATELY after first login
-    // This is a bcrypt hash of "BeSure2025!"
     await db.insert(schema.users).values({
       name: "System Admin",
       email: adminEmail,
