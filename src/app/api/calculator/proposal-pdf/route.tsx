@@ -437,12 +437,12 @@ function ProposalDocument({ data }: { data: ProposalData }) {
         {/* ── Header band ── */}
         <View style={styles.headerBand}>
           <View>
-            <Text style={styles.agencyName}>BeSure</Text>
+            <Text style={styles.agencyName}>Myloe</Text>
             <Text style={styles.agencyTagline}>Insurance Solutions · IRA Regulated</Text>
             <Text style={styles.agencyDetail}>Westlands Commercial Centre, 2nd Floor</Text>
             <Text style={styles.agencyDetail}>P.O Box 12345 – 00100, Nairobi, Kenya</Text>
             <Text style={styles.agencyDetail}>Tel: +254 700 000 000</Text>
-            <Text style={styles.agencyDetail}>info@besure.co.ke  |  www.besure.co.ke</Text>
+            <Text style={styles.agencyDetail}>info@myloe.co.ke  |  www.myloe.co.ke</Text>
           </View>
           <View>
             <Text style={styles.docLabel}>Insurance Quote</Text>
@@ -655,7 +655,7 @@ function ProposalDocument({ data }: { data: ProposalData }) {
               2. Cover will only commence upon receipt of the full premium or first installment and issuance of a Cover Note.{"\n"}
               3. The insured value should reflect the current market value of the vehicle. Under-insurance may result in proportional claims settlement.{"\n"}
               4. Full terms and conditions are as per the policy wording issued by the selected insurer.{"\n"}
-              5. BeSure Insurance Solutions is regulated by the Insurance Regulatory Authority (IRA) of Kenya.
+              5. Myloe Insurance Agency is regulated by the Insurance Regulatory Authority (IRA) of Kenya.
             </Text>
           </View>
 
@@ -663,7 +663,7 @@ function ProposalDocument({ data }: { data: ProposalData }) {
           <View style={styles.signatureRow}>
             <View style={styles.signatureBlock}>
               <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Prepared by (BeSure Insurance Solutions)</Text>
+              <Text style={styles.signatureLabel}>Prepared by (Myloe Insurance Agency)</Text>
             </View>
             <View style={styles.signatureBlock}>
               <View style={styles.signatureLine} />
@@ -680,9 +680,9 @@ function ProposalDocument({ data }: { data: ProposalData }) {
         {/* ── Footer ── */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerLeft}>
-            BeSure Insurance Solutions · IRA Regulated · Ref: {refNo}
+            Myloe Insurance Agency · IRA Regulated · Ref: {refNo}
           </Text>
-          <Text style={styles.footerRight}>www.besure.co.ke</Text>
+          <Text style={styles.footerRight}>www.myloe.co.ke</Text>
         </View>
 
       </Page>
@@ -740,7 +740,7 @@ export async function POST(req: NextRequest) {
     const clientRef = parsed.data.clientName
       ? parsed.data.clientName.replace(/\s+/g, "-").toUpperCase()
       : "Quote";
-    const filename = `BeSure-Proposal-${clientRef}-${new Date().toISOString().split("T")[0]}.pdf`;
+    const filename = `Myloe-Proposal-${clientRef}-${new Date().toISOString().split("T")[0]}.pdf`;
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

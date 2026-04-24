@@ -1,5 +1,5 @@
 // src/lib/cloudinary.ts
-// Cloudinary upload helper for BeSure Insurance Solutions
+// Cloudinary upload helper for Myloe Insurance Agency
 // Replace CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in .env.local
 
 import { v2 as cloudinary, UploadApiErrorResponse, UploadApiResponse } from "cloudinary";
@@ -13,14 +13,14 @@ cloudinary.config({
 });
 
 export type CloudinaryFolder =
-  | "besure/customers/id"
-  | "besure/customers/kra"
-  | "besure/customers/passport"
-  | "besure/customers/company-docs"
-  | "besure/policies/logbooks"
-  | "besure/policies/valuations"
-  | "besure/claims/docs"
-  | "besure/claims/photos";
+  | "myloe/customers/id"
+  | "myloe/customers/kra"
+  | "myloe/customers/passport"
+  | "myloe/customers/company-docs"
+  | "myloe/policies/logbooks"
+  | "myloe/policies/valuations"
+  | "myloe/claims/docs"
+  | "myloe/claims/photos";
 
 interface UploadResult {
   publicId: string;

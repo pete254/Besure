@@ -98,8 +98,8 @@ export default function LoginPage() {
             <div style={{ marginBottom: "32px", textAlign: "center" }}>
               <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
                 <img
-                  src="/besure_logo.png"
-                  alt="BeSure Insurance"
+                  src="/myloe_logo.png"
+                  alt="Myloe Insurance"
                   style={{ width: "80px", height: "auto", display: "block", margin: "0 auto" }}
                 />
               </div>
@@ -169,7 +169,7 @@ export default function LoginPage() {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@besure.co.ke"
+                  placeholder="admin@myloe.co.ke"
                   required
                   style={{
                     width: "100%",
@@ -295,7 +295,7 @@ export default function LoginPage() {
             marginTop: "20px",
           }}
         >
-          IRA Regulated · Kenya Motor Insurance · © {new Date().getFullYear()} BeSure Insurance Solutions
+          IRA Regulated · Kenya Motor Insurance · © {new Date().getFullYear()} Myloe Insurance Agency
         </p>
       </div>
 

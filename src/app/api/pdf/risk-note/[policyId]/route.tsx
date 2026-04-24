@@ -228,12 +228,12 @@ function RiskNoteDocument({ data }: { data: any }) {
         <View style={styles.headerRow}>
           {/* Agency info */}
           <View style={styles.agencyBlock}>
-            <Text style={styles.agencyName}>BeSure Insurance Solutions</Text>
+            <Text style={styles.agencyName}>Myloe Insurance Agency</Text>
             <Text style={styles.agencyTagline}>IRA Regulated Insurance Agency · Kenya Motor Insurance</Text>
             <Text style={styles.agencyLine}>Westlands Commercial Centre, 2nd Floor, Wing B</Text>
             <Text style={styles.agencyLine}>P.O Box 12345 – 00100, Nairobi, Kenya</Text>
-            <Text style={styles.agencyLine}>Tel: +254 700 000 000  |  Email: info@besure.co.ke</Text>
-            <Text style={styles.agencyLine}>Website: www.besure.co.ke</Text>
+            <Text style={styles.agencyLine}>Tel: +254 700 000 000  |  Email: info@myloe.co.ke</Text>
+            <Text style={styles.agencyLine}>Website: www.myloe.co.ke</Text>
           </View>
 
           {/* Doc title */}
@@ -253,7 +253,7 @@ function RiskNoteDocument({ data }: { data: any }) {
         <View style={styles.infoGrid}>
           <View style={styles.infoCell}>
             <Text style={styles.infoLabel}>Agency</Text>
-            <Text style={styles.infoValue}>BeSure Insurance Solutions</Text>
+            <Text style={styles.infoValue}>Myloe Insurance Agency</Text>
           </View>
           <View style={styles.infoCell}>
             <Text style={styles.infoLabel}>Class of Insurance</Text>
@@ -458,7 +458,7 @@ function RiskNoteDocument({ data }: { data: any }) {
         <View style={styles.signatureRow}>
           <View style={styles.signatureBlock}>
             <View style={styles.signatureLine} />
-            <Text style={styles.signatureLabel}>Prepared By (BeSure Insurance Solutions)</Text>
+            <Text style={styles.signatureLabel}>Prepared By (Myloe Insurance Agency)</Text>
           </View>
           <View style={styles.signatureBlock}>
             <View style={styles.signatureLine} />
@@ -473,7 +473,7 @@ function RiskNoteDocument({ data }: { data: any }) {
         {/* ── FOOTER ── */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>
-            BeSure Insurance Solutions · IRA Regulated · www.besure.co.ke
+            Myloe Insurance Agency · IRA Regulated · www.myloe.co.ke
           </Text>
           <Text style={styles.footerText}>
             Generated on {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}

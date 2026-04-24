@@ -358,7 +358,7 @@ export default function ReportsPage() {
 
       <div className="print-header" style={{ marginBottom: "16px" }}>
         <h1 style={{ fontSize: "18px", fontWeight: 700 }}>
-          BeSure Insurance Solutions
+          Myloe Insurance Agency
         </h1>
         <p style={{ fontSize: "13px" }}>
           {selected?.label} · Generated {new Date().toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" })}

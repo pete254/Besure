@@ -103,6 +103,8 @@ export async function POST(
         paymentMode: data.paymentMode,
         ipfProvider: original.ipfProvider,
         ipfLoanReference: original.ipfLoanReference,
+        certificateExpiryDate: data.endDate,
+        certificateExpiryReason: null,
         notes: data.notes || `Renewal of policy from ${original.startDate} – ${original.endDate}`,
         status: "Active",
       })

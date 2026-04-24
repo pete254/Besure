@@ -79,8 +79,8 @@ export default function Sidebar() {
       >
         <div style={{ width: "32px", height: "32px", flexShrink: 0, overflow: "hidden" }}>
           <img
-            src="/besure_logo.png"
-            alt="BeSure"
+            src="/myloe_logo.png"
+            alt="Myloe"
             style={{ width: "32px", height: "32px", objectFit: "contain", display: "block" }}
           />
         </div>
@@ -94,7 +94,7 @@ export default function Sidebar() {
               lineHeight: 1.2,
             }}
           >
-            BeSure
+            Myloe
           </span>
           <span
             style={{

@@ -16,6 +16,15 @@ interface DashboardData {
   expiredToday: number;
   totalActive: number;
   totalPolicies: number;
+  certificatesExpiringIn7: Array<{
+    id: string;
+    policyNumber?: string | null;
+    customerName?: string | null;
+    certificateExpiryDate?: string | null;
+    certificateExpiryReason?: string | null;
+    daysUntilExpiry: number;
+  }>;
+  certificatesExpiredCount: number;
   claimsByStage: Record<string, number>;
   totalActiveClaims: number;
   claimsNearing30: number;
@@ -41,6 +50,40 @@ interface DashboardData {
     createdAt: string;
     customerName?: string | null;
   }[];
+  applicationHistoryLimited: Array<{
+    number: number;
+    type: "policy" | "claim";
+    id: string;
+    createdAt: string;
+    policyNumber?: string | null;
+    claimNumber?: string | null;
+    customerName?: string | null;
+    description: string;
+    amount?: string | null;
+  }>;
+  applicationHistoryAll: Array<{
+    number: number;
+    type: "policy" | "claim";
+    id: string;
+    createdAt: string;
+    policyNumber?: string | null;
+    claimNumber?: string | null;
+    customerName?: string | null;
+    description: string;
+    amount?: string | null;
+  }>;
+  applicationHistoryTotal: number;
+  drafts: Array<{
+    number: number;
+    id: string;
+    draftType: string;
+    draftKey: string;
+    label: string;
+    step?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  draftsTotal: number;
 }
 
 function fmtShort(n: number | undefined) {
@@ -191,7 +234,7 @@ interface KPICardProps {
   sub?: string;
   accent?: string;
   href?: string;
-  alert?: "red" | "amber" | "green";
+  alert?: "red" | "amber" | "green" | "pink";
 }
 
 function KPICard({ icon, label, value, sub, accent, href, alert }: KPICardProps) {
@@ -210,6 +253,11 @@ function KPICard({ icon, label, value, sub, accent, href, alert }: KPICardProps)
       bg: "rgba(16,185,129,0.08)",
       border: "rgba(16,185,129,0.3)",
       pulse: "var(--brand)",
+    },
+    pink: {
+      bg: "rgba(236,72,153,0.08)",
+      border: "rgba(236,72,153,0.3)",
+      pulse: "#ec4899",
     },
   };
   const a = alert ? alertColors[alert] : null;
@@ -322,6 +370,505 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
           {sub}
         </p>
       )}
+    </div>
+  );
+}
+
+function ApplicationHistoryModule({ data }: { data: DashboardData }) {
+  const [activeTab, setActiveTab] = useState<"recent" | "drafts">("recent");
+  const [showAll, setShowAll] = useState(false);
+
+  const recentData = showAll ? data.applicationHistoryAll : data.applicationHistoryLimited;
+
+  return (
+    <div>
+      <SectionHeader
+        title="Application History"
+        sub={`${data.applicationHistoryTotal} total applications · ${data.draftsTotal} drafts`}
+      />
+      <div
+        style={{
+          backgroundColor: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          borderRadius: "10px",
+          overflow: "hidden",
+        }}
+      >
+        {/* Tabs */}
+        <div
+          style={{
+            display: "flex",
+            borderBottom: "1px solid var(--border)",
+            backgroundColor: "var(--bg-app)",
+          }}
+        >
+          {[
+            { id: "recent", label: `Recent (${data.applicationHistoryTotal})` },
+            { id: "drafts", label: `Drafts (${data.draftsTotal})` },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as "recent" | "drafts")}
+              style={{
+                flex: 1,
+                padding: "14px 16px",
+                backgroundColor: "transparent",
+                border: "none",
+                borderBottom:
+                  activeTab === tab.id ? "2px solid var(--brand)" : "2px solid transparent",
+                color: activeTab === tab.id ? "var(--text-primary)" : "var(--text-muted)",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                if (activeTab !== tab.id) {
+                  (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== tab.id) {
+                  (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
+                }
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Recent Tab */}
+        {activeTab === "recent" && (
+          <div style={{ padding: "16px 0" }}>
+            {recentData.length === 0 ? (
+              <div
+                style={{
+                  padding: "32px 24px",
+                  textAlign: "center",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <Activity size={28} style={{ opacity: 0.5, marginBottom: "8px" }} />
+                <p style={{ fontSize: "13px", margin: 0 }}>No applications yet.</p>
+              </div>
+            ) : (
+              <>
+                {recentData.map((app, idx) => {
+                  const isPolicy = app.type === "policy";
+                  const icon = isPolicy ? <FileText size={14} /> : <AlertCircle size={14} />;
+                  const iconColor = isPolicy ? "var(--brand)" : "#f87171";
+                  const date = new Date(app.createdAt).toLocaleDateString("en-KE", {
+                    day: "numeric",
+                    month: "short",
+                    year: "2-digit",
+                  });
+                  const time = new Date(app.createdAt).toLocaleTimeString("en-KE", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  const href = isPolicy ? `/policies/${app.id}` : `/claims/${app.id}`;
+                  const number = (app as any).policyNumber || (app as any).claimNumber || "—";
+
+                  return (
+                    <a
+                      key={app.id}
+                      href={href}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        padding: "12px 16px",
+                        borderTop: idx > 0 ? "1px solid var(--border)" : "none",
+                        textDecoration: "none",
+                        color: "inherit",
+                        transition: "background-color 0.1s",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) =>
+                        ((e.currentTarget as HTMLElement).style.backgroundColor =
+                          "var(--bg-hover)")
+                      }
+                      onMouseLeave={(e) =>
+                        ((e.currentTarget as HTMLElement).style.backgroundColor =
+                          "transparent")
+                      }
+                    >
+                      {/* Number */}
+                      <div
+                        style={{
+                          minWidth: "24px",
+                          height: "24px",
+                          borderRadius: "4px",
+                          backgroundColor: "var(--brand-dim)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          color: "var(--brand)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {app.number}
+                      </div>
+
+                      {/* Type icon */}
+                      <div
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "6px",
+                          backgroundColor: `${iconColor}15`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          color: iconColor,
+                        }}
+                      >
+                        {icon}
+                      </div>
+
+                      {/* Content */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "3px",
+                          }}
+                        >
+                          <p
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: 600,
+                              color: "var(--text-primary)",
+                              margin: 0,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {app.customerName || "Unknown"}
+                          </p>
+                          <span
+                            style={{
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              backgroundColor: `${iconColor}15`,
+                              color: iconColor,
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              textTransform: "uppercase",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isPolicy ? "Policy" : "Claim"}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              color: "var(--text-muted)",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {number}
+                          </span>
+                        </div>
+                        <p
+                          style={{
+                            fontSize: "11px",
+                            color: "var(--text-muted)",
+                            margin: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {app.description}
+                        </p>
+                      </div>
+
+                      {/* Amount + Date */}
+                      <div
+                        style={{
+                          textAlign: "right",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {app.amount && (
+                          <p
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              color: isPolicy ? "var(--brand)" : "#f87171",
+                              margin: 0,
+                            }}
+                          >
+                            {fmtShort(parseFloat(app.amount as any) || 0)}
+                          </p>
+                        )}
+                        <p
+                          style={{
+                            fontSize: "10px",
+                            color: "var(--text-muted)",
+                            margin: "2px 0 0",
+                          }}
+                        >
+                          {date}
+                        </p>
+                        <p
+                          style={{
+                            fontSize: "10px",
+                            color: "var(--text-muted)",
+                            margin: 0,
+                          }}
+                        >
+                          {time}
+                        </p>
+                      </div>
+
+                      <ChevronRight
+                        size={14}
+                        color="var(--text-muted)"
+                        style={{ flexShrink: 0 }}
+                      />
+                    </a>
+                  );
+                })}
+
+                {/* View All / View Less Button */}
+                {data.applicationHistoryTotal > 15 && (
+                  <div
+                    style={{
+                      padding: "12px 16px",
+                      borderTop: "1px solid var(--border)",
+                      textAlign: "center",
+                    }}
+                  >
+                    <button
+                      onClick={() => setShowAll(!showAll)}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "var(--bg-app)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "6px",
+                        color: "var(--brand)",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor =
+                          "var(--brand-dim)";
+                        (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor =
+                          "var(--bg-app)";
+                        (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+                      }}
+                    >
+                      {showAll ? "View Less" : `View All (${data.applicationHistoryTotal})`}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Drafts Tab */}
+        {activeTab === "drafts" && (
+          <div style={{ padding: "16px 0" }}>
+            {data.drafts.length === 0 ? (
+              <div
+                style={{
+                  padding: "32px 24px",
+                  textAlign: "center",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <FileText size={28} style={{ opacity: 0.5, marginBottom: "8px" }} />
+                <p style={{ fontSize: "13px", margin: 0 }}>No drafts yet.</p>
+              </div>
+            ) : (
+              <>
+                {data.drafts.map((draft, idx) => {
+                  const draftDate = new Date(draft.updatedAt).toLocaleDateString("en-KE", {
+                    day: "numeric",
+                    month: "short",
+                    year: "2-digit",
+                  });
+                  const draftTime = new Date(draft.updatedAt).toLocaleTimeString("en-KE", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+
+                  return (
+                    <a
+                      key={draft.id}
+                      href={`/drafts/${draft.id}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        padding: "12px 16px",
+                        borderTop: idx > 0 ? "1px solid var(--border)" : "none",
+                        textDecoration: "none",
+                        color: "inherit",
+                        transition: "background-color 0.1s",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) =>
+                        ((e.currentTarget as HTMLElement).style.backgroundColor =
+                          "var(--bg-hover)")
+                      }
+                      onMouseLeave={(e) =>
+                        ((e.currentTarget as HTMLElement).style.backgroundColor =
+                          "transparent")
+                      }
+                    >
+                      {/* Number */}
+                      <div
+                        style={{
+                          minWidth: "24px",
+                          height: "24px",
+                          borderRadius: "4px",
+                          backgroundColor: "#fbbf2415",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          color: "#fbbf24",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {draft.number}
+                      </div>
+
+                      {/* Draft icon */}
+                      <div
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "6px",
+                          backgroundColor: "#fbbf2415",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          color: "#fbbf24",
+                        }}
+                      >
+                        <FileText size={14} />
+                      </div>
+
+                      {/* Content */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "3px",
+                          }}
+                        >
+                          <p
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: 600,
+                              color: "var(--text-primary)",
+                              margin: 0,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {draft.label}
+                          </p>
+                          <span
+                            style={{
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              backgroundColor: "#fbbf2415",
+                              color: "#fbbf24",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              textTransform: "uppercase",
+                              flexShrink: 0,
+                            }}
+                          >
+                            Draft
+                          </span>
+                        </div>
+                        <p
+                          style={{
+                            fontSize: "11px",
+                            color: "var(--text-muted)",
+                            margin: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {draft.draftType} {draft.step ? `• Step: ${draft.step}` : ""}
+                        </p>
+                      </div>
+
+                      {/* Date */}
+                      <div
+                        style={{
+                          textAlign: "right",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <p
+                          style={{
+                            fontSize: "10px",
+                            color: "var(--text-muted)",
+                            margin: 0,
+                          }}
+                        >
+                          Updated
+                        </p>
+                        <p
+                          style={{
+                            fontSize: "10px",
+                            color: "var(--text-muted)",
+                            margin: 0,
+                          }}
+                        >
+                          {draftDate}
+                        </p>
+                        <p
+                          style={{
+                            fontSize: "10px",
+                            color: "var(--text-muted)",
+                            margin: 0,
+                          }}
+                        >
+                          {draftTime}
+                        </p>
+                      </div>
+
+                      <ChevronRight
+                        size={14}
+                        color="var(--text-muted)"
+                        style={{ flexShrink: 0 }}
+                      />
+                    </a>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -520,8 +1067,90 @@ export default function DashboardPage() {
             alert={safeData.expiredToday > 0 ? "red" : undefined}
             accent="#f87171"
           />
+          <KPICard
+            icon={<FileText size={16} color="#ec4899" />}
+            label="Certificates Expiring in 7d"
+            value={safeData.certificatesExpiringIn7?.length || 0}
+            sub={safeData.certificatesExpiredCount > 0 ? `${safeData.certificatesExpiredCount} already expired` : "All current"}
+            href="/policies?filter=cert-expiring"
+            alert={safeData.certificatesExpiringIn7?.length > 0 ? "pink" : undefined}
+            accent="#ec4899"
+          />
         </div>
       </div>
+
+      {/* ── Certificate Expiry Alert Card ── */}
+      {safeData.certificatesExpiringIn7 && safeData.certificatesExpiringIn7.length > 0 && (
+        <div>
+          <SectionHeader title="Insurance Certificates" sub="Expiring within 7 days" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px" }}>
+            <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
+              <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "rgba(236, 72, 153, 0.1)", border: "1px solid rgba(236, 72, 153, 0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <FileText size={18} color="#ec4899" />
+                </div>
+                <div>
+                  <p style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", margin: 0 }}>Expiring Certificates</p>
+                  <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "2px 0 0" }}>{safeData.certificatesExpiringIn7.length} certificate{safeData.certificatesExpiringIn7.length !== 1 ? "s" : ""}</p>
+                </div>
+              </div>
+              <div style={{ padding: "0" }}>
+                {safeData.certificatesExpiringIn7.map((cert, idx) => {
+                  const expiryDate = cert.certificateExpiryDate
+                    ? new Date(cert.certificateExpiryDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
+                    : "—";
+                  const daysColor = cert.daysUntilExpiry <= 1 ? "#f87171" : cert.daysUntilExpiry <= 3 ? "#fbbf24" : "#ec4899";
+                  return (
+                    <div
+                      key={cert.id}
+                      style={{
+                        padding: "12px 16px",
+                        borderTop: idx > 0 ? "1px solid var(--border)" : "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                          {cert.policyNumber || "Policy"} — {cert.customerName || "Unknown"}
+                        </p>
+                        {cert.certificateExpiryReason && (
+                          <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "2px 0 0" }}>{cert.certificateExpiryReason}</p>
+                        )}
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <p style={{ fontSize: "12px", fontWeight: 700, color: daysColor, margin: 0 }}>
+                          {cert.daysUntilExpiry < 0 ? `Expired ${Math.abs(cert.daysUntilExpiry)}d ago` : cert.daysUntilExpiry === 0 ? "Today" : `${cert.daysUntilExpiry}d left`}
+                        </p>
+                        <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "2px 0 0" }}>{expiryDate}</p>
+                      </div>
+                      <a
+                        href={`/policies/${cert.id}`}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: "6px",
+                          border: "1px solid #ec4899",
+                          backgroundColor: "rgba(236, 72, 153, 0.08)",
+                          color: "#ec4899",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          textDecoration: "none",
+                          whiteSpace: "nowrap",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Update
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── ROW 2: Finance Summary ── */}
       <div>
@@ -1644,6 +2273,11 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── ROW 7: Application History ── */}
+      <div>
+        <ApplicationHistoryModule data={safeData} />
       </div>
     </div>
   );

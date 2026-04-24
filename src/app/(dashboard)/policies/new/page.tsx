@@ -38,6 +38,8 @@ interface BenefitEntry {
   benefitOptionId: string;
   benefitName: string;
   amountKes: string;
+  // For percentage-based benefits: user can edit the rate
+  percentageRate?: string; // e.g. "0.5" for 0.5%
   // Extra UI fields
   windscreenValue?: string;
   infotainmentValue?: string;
@@ -127,9 +129,14 @@ export default function NewPolicyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
+  
+  // Initialize with today's date for startDate
+  const getTodayDateString = () => new Date().toISOString().split("T")[0];
+  
   const [data, setData] = useState<PolicyData>({
     ...emptyPolicy,
     customerId: searchParams.get("customerId") || "",
+    startDate: getTodayDateString(),
   });
   const [insurers, setInsurers] = useState<Insurer[]>([]);
   const [allBenefits, setAllBenefits] = useState<Benefit[]>([]);
@@ -200,7 +207,9 @@ export default function NewPolicyPage() {
         const benefitDef = allBenefits.find(ab => ab.id === b.benefitOptionId);
         const cfg = benefitDef?.calcConfig as Record<string, any> | null;
         if (cfg?.type === "percentage") {
-          const newAmt = (parseFloat(prev.sumInsured || "0") * cfg.rate).toFixed(2);
+          // Use the user-edited rate if available, otherwise use the default rate from config
+          const rate = b.percentageRate ? parseFloat(b.percentageRate) / 100 : cfg.rate;
+          const newAmt = (parseFloat(prev.sumInsured || "0") * rate).toFixed(2);
           return { ...b, amountKes: newAmt };
         }
         return b;
@@ -256,6 +265,7 @@ export default function NewPolicyPage() {
     if (!cfg) return entry;
 
     if (cfg.type === "percentage") {
+      entry.percentageRate = String((cfg.rate * 100).toFixed(2)); // Store as percentage (e.g. "0.5" for 0.5%)
       entry.amountKes = (parseFloat(data.sumInsured || "0") * cfg.rate).toFixed(2);
     } else if (cfg.type === "fixed") {
       entry.amountKes = String(cfg.defaultAmount ?? "0");
@@ -312,6 +322,11 @@ export default function NewPolicyPage() {
         }
         if (field === "entertainmentValue") {
           entry.amountKes = calcCoveragePremium(value);
+        }
+        if (field === "percentageRate") {
+          // When rate changes, recalculate amount: rate (as %) * sum insured
+          const rateAsDecimal = parseFloat(value || "0") / 100;
+          entry.amountKes = (parseFloat(prev.sumInsured || "0") * rateAsDecimal).toFixed(2);
         }
         if (field === "lossOfUseDays") {
           const tiers: Record<string, string> = { "10": "3000.00", "20": "6000.00", "30": "9000.00" };
@@ -431,15 +446,28 @@ export default function NewPolicyPage() {
 
     if (cfg.type === "percentage") {
       return (
-        <div style={{ marginTop: "8px" }}>
-          <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-            Auto-calculated: {cfg.label} — editable
-          </p>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
-            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>KES</span>
-            <input type="number" value={b.amountKes}
+        <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Rate (%)
+            </label>
+            <input type="number" step="0.01" placeholder="0.5" value={b.percentageRate || ""}
+              onChange={(e) => updateBenefitField(b.benefitOptionId, "percentageRate", e.target.value)}
+              style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+              onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>Editable rate per sum insured</p>
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Premium (KES)
+            </label>
+            <input type="number" step="0.01" placeholder="0.00" value={b.amountKes || ""}
               onChange={(e) => updateBenefitField(b.benefitOptionId, "amountKes", e.target.value)}
-              style={{ width: "150px", padding: "6px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", color: "var(--brand)", fontSize: "13px", outline: "none", fontWeight: 600 }} />
+              style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", color: "var(--brand)", fontSize: "13px", outline: "none", fontWeight: 600 }}
+              onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>Edit rate or amount directly</p>
           </div>
         </div>
       );

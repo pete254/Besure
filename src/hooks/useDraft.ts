@@ -9,10 +9,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // Get or create a stable session ID stored in localStorage
 function getSessionId(): string {
   if (typeof window === "undefined") return "server";
-  let id = localStorage.getItem("besure_session_id");
+  let id = localStorage.getItem("myloe_session_id");
   if (!id) {
     id = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    localStorage.setItem("besure_session_id", id);
+    localStorage.setItem("myloe_session_id", id);
   }
   return id;
 }

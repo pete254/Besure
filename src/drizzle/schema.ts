@@ -1,4 +1,4 @@
-// BeSure Insurance Solutions — Drizzle ORM Schema
+// Myloe Insurance Agency — Drizzle ORM Schema
 // Neon DB (Serverless PostgreSQL) | Version 2.2
 // Run: npx drizzle-kit push  to apply to Neon
 
@@ -276,6 +276,8 @@ export const policies = pgTable(
     ipfProvider: varchar("ipf_provider", { length: 255 }),
     ipfLoanReference: varchar("ipf_loan_reference", { length: 255 }),
     status: policyStatusEnum("status").notNull().default("Pending"),
+    certificateExpiryDate: date("certificate_expiry_date"),
+    certificateExpiryReason: varchar("certificate_expiry_reason", { length: 255 }),
     notes: text("notes"),
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -285,6 +287,7 @@ export const policies = pgTable(
     customerIdx: index("policies_customer_idx").on(t.customerId),
     insurerIdx: index("policies_insurer_idx").on(t.insurerId),
     endDateIdx: index("policies_end_date_idx").on(t.endDate),
+    certificateExpiryIdx: index("policies_certificate_expiry_idx").on(t.certificateExpiryDate),
     statusIdx: index("policies_status_idx").on(t.status),
   })
 );

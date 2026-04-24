@@ -3,9 +3,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Car, CreditCard, FileText, Calendar, User, Building2, CheckCircle2, Clock } from "lucide-react";
+import { ArrowLeft, Car, CreditCard, FileText, Calendar, User, Building2, CheckCircle2, Clock, RefreshCw, X } from "lucide-react";
 import RiskNoteButton from "@/components/RiskNoteButton";
 
 interface Policy {
@@ -26,6 +26,8 @@ interface Policy {
   grandTotal?: string | null;
   paymentMode?: string | null;
   ipfProvider?: string | null;
+  certificateExpiryDate?: string | null;
+  certificateExpiryReason?: string | null;
   notes?: string | null;
   status: string;
   insurerId?: string | null;
@@ -71,6 +73,7 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 
 export default function PolicyDetailPage() {
   const { id } = useParams();
+  const router = useRouter();
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -78,6 +81,14 @@ export default function PolicyDetailPage() {
   const [paymentList, setPaymentList] = useState<Payment[]>([]);
   const [insurer, setInsurer] = useState<{ name: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showRenewModal, setShowRenewModal] = useState(false);
+  const [showCertExpiry, setShowCertExpiry] = useState(false);
+  const [certExpiryForm, setCertExpiryForm] = useState({ certificateExpiryDate: "", certificateExpiryReason: "" });
+  const [certExpirySaving, setCertExpirySaving] = useState(false);
+  const [certExpiryError, setCertExpiryError] = useState("");
+  const [renewData, setRenewData] = useState({ startDate: "", endDate: "", sumInsured: "", basicRate: "", policyNumber: "", paymentMode: "Full Payment", notes: "" });
+  const [renewSaving, setRenewSaving] = useState(false);
+  const [renewError, setRenewError] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -96,6 +107,104 @@ export default function PolicyDetailPage() {
     }
     if (id) load();
   }, [id]);
+
+  // Initialize renew dates when policy loads
+  useEffect(() => {
+    if (policy) {
+      const newStart = new Date(policy.endDate);
+      newStart.setDate(newStart.getDate() + 1);
+      const newEnd = new Date(newStart);
+      newEnd.setFullYear(newEnd.getFullYear() + 1);
+      newEnd.setDate(newEnd.getDate() - 1);
+      setRenewData({
+        startDate: newStart.toISOString().split("T")[0],
+        endDate: newEnd.toISOString().split("T")[0],
+        sumInsured: policy.sumInsured || "",
+        basicRate: policy.basicRate || "",
+        policyNumber: "",
+        paymentMode: (policy.paymentMode as any) || "Full Payment",
+        notes: "",
+      });
+      setCertExpiryForm({
+        certificateExpiryDate: policy.certificateExpiryDate || "",
+        certificateExpiryReason: policy.certificateExpiryReason || "",
+      });
+    }
+  }, [policy]);
+
+  async function handleRenew() {
+    setRenewError("");
+    setRenewSaving(true);
+    try {
+      const basicPremium = renewData.sumInsured && renewData.basicRate
+        ? ((parseFloat(renewData.sumInsured) * parseFloat(renewData.basicRate)) / 100).toFixed(2)
+        : "0.00";
+      const iraLevy = (parseFloat(basicPremium) * 0.0045).toFixed(2);
+      const grandTotal = (parseFloat(basicPremium) + parseFloat(iraLevy) + 40 + 100).toFixed(2);
+
+      const res = await fetch(`/api/policies/${id}/renew`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...renewData,
+          basicPremium,
+          iraLevy,
+          trainingLevy: "0",
+          stampDuty: "40",
+          phcf: "100",
+          grandTotal,
+          totalBenefits: "0",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRenewError(data.error || "Failed to renew");
+        return;
+      }
+      // Navigate to the new renewed policy
+      router.push(`/policies/${data.policy.id}`);
+      setShowRenewModal(false);
+    } catch {
+      setRenewError("Something went wrong");
+    } finally {
+      setRenewSaving(false);
+    }
+  }
+
+  async function handleUpdateCertExpiry() {
+    setCertExpiryError("");
+    setCertExpirySaving(true);
+    try {
+      if (!certExpiryForm.certificateExpiryDate) {
+        setCertExpiryError("Certificate expiry date is required");
+        setCertExpirySaving(false);
+        return;
+      }
+
+      const res = await fetch(`/api/policies/${id}/certificate-expiry`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          certificateExpiryDate: certExpiryForm.certificateExpiryDate,
+          certificateExpiryReason: certExpiryForm.certificateExpiryReason || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setCertExpiryError(data.error || "Failed to update");
+        return;
+      }
+
+      const data = await res.json();
+      setPolicy(data.policy);
+      setShowCertExpiry(false);
+    } catch {
+      setCertExpiryError("Something went wrong");
+    } finally {
+      setCertExpirySaving(false);
+    }
+  }
 
   if (loading) return <div style={{ padding: "48px", textAlign: "center" }} className="text-muted">Loading policy...</div>;
   if (!policy) return <div style={{ padding: "48px", textAlign: "center" }} className="text-muted">Policy not found.</div>;
@@ -142,7 +251,15 @@ export default function PolicyDetailPage() {
           <p style={{ fontSize: "12px", color: expiryColor, margin: 0, fontWeight: 600 }}>
             {daysLeft < 0 ? "Expired" : daysLeft === 0 ? "Expires today" : `${daysLeft} days left`}
           </p>
-          <RiskNoteButton policyId={policy.id} policyNumber={policy.policyNumber} />
+          <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+            <RiskNoteButton policyId={policy.id} policyNumber={policy.policyNumber} />
+            <button
+              onClick={() => setShowRenewModal(true)}
+              style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--brand)", backgroundColor: "var(--brand-dim)", color: "var(--brand)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+            >
+              <RefreshCw size={12} /> Renew
+            </button>
+          </div>
         </div>
       </div>
 
@@ -165,6 +282,77 @@ export default function PolicyDetailPage() {
             <div style={{ marginTop: "14px", padding: "10px", backgroundColor: "var(--bg-app)", borderRadius: "6px" }}>
               <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "4px" }}>Notes</p>
               <p className="text-secondary" style={{ fontSize: "13px", margin: 0 }}>{policy.notes}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Certificate Expiry */}
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+            <p className="card-title" style={{ margin: 0 }}>
+              <FileText size={14} style={{ display: "inline", marginRight: "6px", verticalAlign: "middle" }} />
+              Certificate Expiry
+            </p>
+            <button
+              onClick={() => setShowCertExpiry(!showCertExpiry)}
+              style={{ padding: "4px 10px", borderRadius: "4px", border: "1px solid var(--border)", backgroundColor: "var(--bg-app)", color: "var(--text-muted)", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
+            >
+              {showCertExpiry ? "Cancel" : "Edit"}
+            </button>
+          </div>
+
+          {!showCertExpiry ? (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <Field 
+                label="Expiry Date" 
+                value={policy.certificateExpiryDate 
+                  ? new Date(policy.certificateExpiryDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
+                  : null
+                }
+              />
+              <Field label="Reason" value={policy.certificateExpiryReason} />
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {certExpiryError && (
+                <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "6px", color: "#fca5a5", fontSize: "12px" }}>
+                  {certExpiryError}
+                </div>
+              )}
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Expiry Date *</label>
+                <input 
+                  type="date" 
+                  value={certExpiryForm.certificateExpiryDate} 
+                  onChange={(e) => setCertExpiryForm(p => ({ ...p, certificateExpiryDate: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Reason (optional)</label>
+                <input 
+                  type="text" 
+                  value={certExpiryForm.certificateExpiryReason} 
+                  onChange={(e) => setCertExpiryForm(p => ({ ...p, certificateExpiryReason: e.target.value }))}
+                  placeholder="e.g. End of policy period, Client request..."
+                  style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                <button 
+                  onClick={() => setShowCertExpiry(false)} 
+                  style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleUpdateCertExpiry}
+                  disabled={certExpirySaving}
+                  style={{ padding: "6px 12px", borderRadius: "6px", border: "none", backgroundColor: certExpirySaving ? "var(--brand-dim)" : "var(--brand)", color: "#000", fontSize: "12px", fontWeight: 600, cursor: certExpirySaving ? "not-allowed" : "pointer" }}
+                >
+                  {certExpirySaving ? "Saving..." : "Save"}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -285,6 +473,76 @@ export default function PolicyDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Renew Modal */}
+      {showRenewModal && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+          <div style={{ backgroundColor: "var(--bg-card)", borderRadius: "12px", border: "1px solid var(--border)", padding: "24px", maxWidth: "420px", width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#ffffff", margin: 0 }}>Renew Policy</h3>
+              <button onClick={() => setShowRenewModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {renewError && (
+              <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "6px", color: "#fca5a5", fontSize: "12px", marginBottom: "12px" }}>
+                {renewError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Start Date</label>
+                <input type="date" value={renewData.startDate} onChange={(e) => setRenewData(p => ({ ...p, startDate: e.target.value }))} style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>End Date</label>
+                <input type="date" value={renewData.endDate} onChange={(e) => setRenewData(p => ({ ...p, endDate: e.target.value }))} style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Sum Insured (KES)</label>
+                <input type="number" value={renewData.sumInsured} onChange={(e) => setRenewData(p => ({ ...p, sumInsured: e.target.value }))} placeholder="e.g. 1500000" style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Basic Rate (%)</label>
+                <input type="number" step="0.01" value={renewData.basicRate} onChange={(e) => setRenewData(p => ({ ...p, basicRate: e.target.value }))} placeholder="e.g. 4.00" style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Payment Mode</label>
+                <select value={renewData.paymentMode} onChange={(e) => setRenewData(p => ({ ...p, paymentMode: e.target.value }))} style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }}>
+                  <option>Full Payment</option>
+                  <option>2 Installments</option>
+                  <option>3 Installments</option>
+                  <option>IPF</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Policy Number</label>
+                <input value={renewData.policyNumber} onChange={(e) => setRenewData(p => ({ ...p, policyNumber: e.target.value }))} placeholder="Add later if pending" style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Notes (optional)</label>
+                <input value={renewData.notes} onChange={(e) => setRenewData(p => ({ ...p, notes: e.target.value }))} placeholder="Any renewal notes..." style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
+              <button onClick={() => setShowRenewModal(false)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleRenew}
+                disabled={renewSaving}
+                style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 18px", borderRadius: "6px", border: "none", backgroundColor: renewSaving ? "var(--brand-dim)" : "var(--brand)", color: "#000", fontSize: "13px", fontWeight: 700, cursor: renewSaving ? "not-allowed" : "pointer" }}
+              >
+                <RefreshCw size={13} />
+                {renewSaving ? "Renewing..." : "Create Renewal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

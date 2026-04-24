@@ -8,6 +8,7 @@ import {
   payments,
   customers,
   insurers,
+  drafts,
 } from "@/drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -41,6 +42,16 @@ export async function GET() {
       (p) => p.endDate >= todayStr && p.endDate <= in7DaysStr
     );
     const expiredToday = allPolicies.filter((p) => p.endDate === todayStr);
+
+    // ── Certificate expiry ───────────────────────────────────────
+    const certificatesExpiringIn7 = allPolicies.filter((p) =>
+      p.certificateExpiryDate &&
+      p.certificateExpiryDate >= todayStr &&
+      p.certificateExpiryDate <= in7DaysStr
+    );
+    const certificatesExpired = allPolicies.filter(
+      (p) => p.certificateExpiryDate && p.certificateExpiryDate < todayStr
+    );
 
     // ── Claims ───────────────────────────────────────────────────
     const allClaims = await db.select().from(claims);
@@ -204,6 +215,69 @@ export async function GET() {
       .orderBy(desc(policies.createdAt))
       .limit(5);
 
+    // ── Application History (Policies + Claims) ──────────────────
+    // Get recent policies and claims, combined and sorted by date
+    const allApplications = [
+      ...allPolicies.map((p) => ({
+        type: "policy" as const,
+        id: p.id,
+        createdAt: p.createdAt,
+        policyNumber: p.policyNumber,
+        customerName:
+          allCustomers.find((c) => c.id === p.customerId)?.customerType ===
+          "Company"
+            ? allCustomers.find((c) => c.id === p.customerId)?.companyName
+            : `${allCustomers.find((c) => c.id === p.customerId)?.firstName} ${
+                allCustomers.find((c) => c.id === p.customerId)?.lastName
+              }`,
+        description: `${p.insuranceType} - ${p.status}`,
+        amount: p.grandTotal,
+      })),
+      ...allClaims.map((c) => {
+        const policy = allPolicies.find((p) => p.id === c.policyId);
+        const customer = allCustomers.find((cu) => cu.id === policy?.customerId);
+        const customerName =
+          customer?.customerType === "Company"
+            ? customer?.companyName
+            : `${customer?.firstName} ${customer?.lastName}`;
+        return {
+          type: "claim" as const,
+          id: c.id,
+          createdAt: c.dateReported,
+          claimNumber: c.claimNumber,
+          customerName: customerName || "Unknown",
+          description: `${c.natureOfLoss} - ${c.stage}`,
+          amount: c.repairEstimate || c.approvedAmount,
+        };
+      }),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const applicationHistoryAll = allApplications.map((app, idx) => ({
+      number: idx + 1,
+      ...app,
+    }));
+
+    const applicationHistoryLimited = applicationHistoryAll.slice(0, 15);
+
+    // ── Drafts ───────────────────────────────────────────────────
+    const allDrafts = await db.select().from(drafts);
+    const draftsData = allDrafts
+      .filter((d) => !d.expiresAt || new Date(d.expiresAt) > today) // exclude expired
+      .map((d, idx) => ({
+        number: idx + 1,
+        id: d.id,
+        draftType: d.draftType,
+        draftKey: d.draftKey,
+        label: d.label || d.draftType,
+        step: d.step,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+      }))
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+
     return NextResponse.json({
       // Policy alerts
       expiringIn30: expiringIn30.length,
@@ -211,6 +285,27 @@ export async function GET() {
       expiredToday: expiredToday.length,
       totalActive: activePolicies.length,
       totalPolicies: allPolicies.length,
+
+      // Certificate expiry
+      certificatesExpiringIn7: certificatesExpiringIn7.map((p) => {
+        const customer = allCustomers.find((c) => c.id === p.customerId);
+        const customerName =
+          customer?.customerType === "Company"
+            ? customer.companyName
+            : `${customer?.firstName} ${customer?.lastName}`;
+        return {
+          id: p.id,
+          policyNumber: p.policyNumber,
+          customerName,
+          certificateExpiryDate: p.certificateExpiryDate,
+          certificateExpiryReason: p.certificateExpiryReason,
+          daysUntilExpiry: Math.ceil(
+            (new Date(p.certificateExpiryDate!).getTime() - today.getTime()) /
+              86400000
+          ),
+        };
+      }),
+      certificatesExpiredCount: certificatesExpired.length,
 
       // Claims
       claimsByStage,
@@ -250,6 +345,15 @@ export async function GET() {
             ? r.customer.companyName
             : `${r.customer?.firstName} ${r.customer?.lastName}`,
       })),
+
+      // Application history
+      applicationHistoryLimited,
+      applicationHistoryAll,
+      applicationHistoryTotal: applicationHistoryAll.length,
+
+      // Drafts
+      drafts: draftsData,
+      draftsTotal: draftsData.length,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -147,6 +147,8 @@ export async function POST(req: NextRequest) {
       paymentMode: data.paymentMode,
       ipfProvider: data.ipfProvider || null,
       ipfLoanReference: data.ipfLoanReference || null,
+      certificateExpiryDate: data.endDate,
+      certificateExpiryReason: null,
       notes: data.notes || null,
       status: "Active",
     }).returning();

@@ -8,10 +8,10 @@ import { eq } from "drizzle-orm";
 import { uploadToCloudinary, deleteFromCloudinary, type CloudinaryFolder } from "@/lib/cloudinary";
 
 const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
-  ID: "besure/customers/id",
-  PASSPORT: "besure/customers/passport",
-  KRA: "besure/customers/kra",
-  OTHER: "besure/customers/company-docs",
+  ID: "myloe/customers/id",
+  PASSPORT: "myloe/customers/passport",
+  KRA: "myloe/customers/kra",
+  OTHER: "myloe/customers/company-docs",
 };
 
 // POST /api/customers/[id]/documents
@@ -50,7 +50,7 @@ export async function POST(
     if (file && file.size > 0) {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const folder = DOC_FOLDER_MAP[docType] || "besure/customers/company-docs";
+      const folder = DOC_FOLDER_MAP[docType] || "myloe/customers/company-docs";
       const filename = `${id}_${docType}_${Date.now()}`;
 
       const result = await uploadToCloudinary(buffer, folder, filename);

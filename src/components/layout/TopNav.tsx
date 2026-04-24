@@ -28,7 +28,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes("/policies/") && pathname.includes("/payment")) return "Record Payment";
   if (pathname.includes("/policies/")) return "Policy Details";
   if (pathname.includes("/claims/")) return "Claim Details";
-  return "BeSure";
+  return "Myloe";
 }
 
 interface TopNavProps {

@@ -1,5 +1,5 @@
 ﻿
-BeSure
+Myloe
 Insurance Agency Management System
 PROJECT SPECIFICATION  -  Version 2.0  (Updated)
 
@@ -11,12 +11,60 @@ Changes in v2.0: Documents · Rates entry · Valuation · Policy type flow · Be
 
 
 1. Project Overview
-BeSure Insurance Solutions is a web-based insurance agency management system built for the Kenyan insurance market, regulated by the Insurance Regulatory Authority (IRA). Motor vehicle insurance is the primary class, with architecture designed to accommodate Fire & Perils, Domestic, Medical, Life, and Travel insurance as the agency grows.
+Myloe Insurance Agency is a web-based insurance agency management system built for the Kenyan insurance market, regulated by the Insurance Regulatory Authority (IRA). Motor vehicle insurance is the primary class, with architecture designed to accommodate Fire & Perils, Domestic, Medical, Life, and Travel insurance as the agency grows.
 
 1.1 Tech Stack
-FrontendNext.js 14+ App Router - deployed on VercelBackend / APINext.js API Routes (Node.js runtime)DatabaseNeon DB (Serverless PostgreSQL)ORMDrizzle ORM (type-safe, Neon-native)File StorageVercel Blob Storage (ID, passport, logbook, valuation docs)EmailResend (payment reminders, policy expiry alerts)Scheduled JobsVercel Cron Jobs (daily notification checks)PDF Generation@react-pdf/renderer (server-side receipts & claim reports)AuthNextAuth.js v5 - single admin login, role-based scaffolding readyStylingTailwind CSS + shadcn/uiValidationZod (all forms and API routes)StateTanStack Query (React Query) for server state
+Frontend
+Next.js 14+ App Router - deployed on Vercel
+Backend / API
+Next.js API Routes (Node.js runtime)
+Database
+Neon DB (Serverless PostgreSQL)
+ORM
+Drizzle ORM (type-safe, Neon-native)
+File Storage
+Vercel Blob Storage (ID, passport, logbook, valuation docs)
+Email
+Resend (payment reminders, policy expiry alerts)
+Scheduled Jobs
+Vercel Cron Jobs (daily notification checks)
+PDF Generation
+@react-pdf/renderer (server-side receipts & claim reports)
+Auth
+NextAuth.js v5 - single admin login, role-based scaffolding ready
+Styling
+Tailwind CSS + shadcn/ui
+Validation
+Zod (all forms and API routes)
+State
+TanStack Query (React Query) for server state
+
 1.2 System Modules
-#ModulePurpose1Customer ManagementOnboard, edit, manage customer profiles and documents2Policy Creation FlowType selector → insurer → vehicle → cover → benefits → premium3Premium CalculatorManual rate + manual valuation → auto-calculated total4Payment ManagementFull / 2-part / 3-part / IPF, schedules, receipts5Cover TrackingDocumentation status, turnaround time, follow-up notes6Claims ManagementStage pipeline, docs, garage & parts follow-up7Dashboard & ReportsKPIs, demographics, commissions, alerts
+#
+Module
+Purpose
+1
+Customer Management
+Onboard, edit, manage customer profiles and documents
+2
+Policy Creation Flow
+Type selector → insurer → vehicle → cover → benefits → premium
+3
+Premium Calculator
+Manual rate + manual valuation → auto-calculated total
+4
+Payment Management
+Full / 2-part / 3-part / IPF, schedules, receipts
+5
+Cover Tracking
+Documentation status, turnaround time, follow-up notes
+6
+Claims Management
+Stage pipeline, docs, garage & parts follow-up
+7
+Dashboard & Reports
+KPIs, demographics, commissions, alerts
+
 
 
 Module 1: Customer Management
@@ -24,11 +72,92 @@ Module 1: Customer Management
 A customer record captures personal information. Documents are never mandatory at onboarding - they can be uploaded at any time. The system tracks which documents are present and flags what is still outstanding.
 
 Personal Information Fields
-FieldTypeRequiredNotesFirst NameTextYesLast NameTextYesMiddle NameTextNoPhone NumberTextYes07xx / +2547xx formatEmail AddressEmailNoUsed for payment reminder emailsID NumberTextNoNational ID numberKRA PINTextNoDate of BirthDateNoFor demographics reportingGenderSelectNoMale / Female / OtherCounty / AreaSelectNoFor area demographics reportingPhysical AddressTextareaNoCustomer TypeSelectYesIndividual / CompanyCompany NameTextConditionalRequired only if Customer Type = Company
+Field
+Type
+Required
+Notes
+First Name
+Text
+Yes
+
+Last Name
+Text
+Yes
+
+Middle Name
+Text
+No
+
+Phone Number
+Text
+Yes
+07xx / +2547xx format
+Email Address
+Email
+No
+Used for payment reminder emails
+ID Number
+Text
+No
+National ID number
+KRA PIN
+Text
+No
+
+Date of Birth
+Date
+No
+For demographics reporting
+Gender
+Select
+No
+Male / Female / Other
+County / Area
+Select
+No
+For area demographics reporting
+Physical Address
+Textarea
+No
+
+Customer Type
+Select
+Yes
+Individual / Company
+Company Name
+Text
+Conditional
+Required only if Customer Type = Company
+
 1.2 Customer Document Uploads
 ⚠️  All documents are optional. Staff can upload, replace, or mark documents at any time - before, during, or after policy creation.
 
-DocumentUpload TypeOptional?StorageNotesNational IDSingle file (both sides on one scan/photo)YesVercel BlobOne upload per customer - not split front/backPassportSingle fileYes - fully optionalVercel BlobOnly uploaded if customer has a passportKRA PIN CertificateSingle fileYesVercel BlobPDF or imageAdditional DocumentSingle file + free-text labelYesVercel BlobStaff labels the doc type themselves
+Document
+Upload Type
+Optional?
+Storage
+Notes
+National ID
+Single file (both sides on one scan/photo)
+Yes
+Vercel Blob
+One upload per customer - not split front/back
+Passport
+Single file
+Yes - fully optional
+Vercel Blob
+Only uploaded if customer has a passport
+KRA PIN Certificate
+Single file
+Yes
+Vercel Blob
+PDF or image
+Additional Document
+Single file + free-text label
+Yes
+Vercel Blob
+Staff labels the doc type themselves
+
 Document Status per item:
 • Uploaded - file stored successfully, date and uploader recorded
 • Pending - document not yet uploaded
@@ -51,7 +180,43 @@ Policy creation uses a step-by-step form (stepper/wizard). The flow adapts based
 2.1 Step 1 - Select Insurance Type
 The very first field on the policy form is the insurance type selector. This determines which subsequent fields appear. Types are displayed in this exact order:
 
-OrderInsurance TypeMotor?Phase1Motor - PrivateYesPhase 1 (fully built)2Motor - CommercialYesPhase 1 (fully built)3Motor - PSV / MatatuYesPhase 1 (fully built)4Fire & PerilsNoPhase 2 (placeholder form)5Domestic PackageNoPhase 2 (placeholder form)6Medical / HealthNoPhase 2 (placeholder form)7Life InsuranceNoPhase 2 (placeholder form)8Travel InsuranceNoPhase 2 (placeholder form)⚠️  Non-motor types in Phase 1 show a simplified form: insurer, customer, sum insured, premium (manual), start/end date, and notes. Full non-motor modules are built in Phase 2.
+Order
+Insurance Type
+Motor?
+Phase
+1
+Motor - Private
+Yes
+Phase 1 (fully built)
+2
+Motor - Commercial
+Yes
+Phase 1 (fully built)
+3
+Motor - PSV / Matatu
+Yes
+Phase 1 (fully built)
+4
+Fire & Perils
+No
+Phase 2 (placeholder form)
+5
+Domestic Package
+No
+Phase 2 (placeholder form)
+6
+Medical / Health
+No
+Phase 2 (placeholder form)
+7
+Life Insurance
+No
+Phase 2 (placeholder form)
+8
+Travel Insurance
+No
+Phase 2 (placeholder form)
+⚠️  Non-motor types in Phase 1 show a simplified form: insurer, customer, sum insured, premium (manual), start/end date, and notes. Full non-motor modules are built in Phase 2.
 
 2.2 Step 2 - Select Insurer
 After selecting insurance type, staff select the insurer:
@@ -62,26 +227,208 @@ After selecting insurance type, staff select the insurer:
 • Manually entered insurer names are saved to the database for future reuse
 
 2.3 Step 3 - Vehicle Details (Motor only)
-FieldTypeRequiredNotesVehicle UseAuto-filled-Pre-filled from Step 1 (Private / Commercial / PSV)MakeTextYese.g. Toyota, Isuzu, MercedesModelTextYese.g. Harrier, NKR, ActrosYear of ManufactureNumberYesCC (Engine Capacity)NumberNoCubic centimetresTonnageNumberConditionalRequired for Commercial and PSVNumber of SeatsNumberConditionalRequired for PSV / MatatuChassis NumberTextYesVIN / frame numberEngine NumberTextYesRegistration NumberTextYese.g. KDA 123ABody TypeSelectNoSaloon / SUV / Pickup / Van / Truck / Bus / OtherColourTextNoLogbookFile uploadNoOptional - PDF or image; stored in Vercel Blob
+Field
+Type
+Required
+Notes
+Vehicle Use
+Auto-filled
+-
+Pre-filled from Step 1 (Private / Commercial / PSV)
+Make
+Text
+Yes
+e.g. Toyota, Isuzu, Mercedes
+Model
+Text
+Yes
+e.g. Harrier, NKR, Actros
+Year of Manufacture
+Number
+Yes
+
+CC (Engine Capacity)
+Number
+No
+Cubic centimetres
+Tonnage
+Number
+Conditional
+Required for Commercial and PSV
+Number of Seats
+Number
+Conditional
+Required for PSV / Matatu
+Chassis Number
+Text
+Yes
+VIN / frame number
+Engine Number
+Text
+Yes
+
+Registration Number
+Text
+Yes
+e.g. KDA 123A
+Body Type
+Select
+No
+Saloon / SUV / Pickup / Van / Truck / Bus / Other
+Colour
+Text
+No
+
+Logbook
+File upload
+No
+Optional - PDF or image; stored in Vercel Blob
+
 2.4 Step 4 - Cover Details & Valuation
 ⚠️  Vehicle value (sum insured) is entered manually by staff based on the customer's declared value or a valuation report. There is no automatic lookup.
 
-FieldTypeRequiredNotesCover TypeSelectYesComprehensive / TPO / TPFT (based on motor type)Vehicle Value / Sum Insured (KES)Number - manual entryYesStaff types this figure; drives all premium calculationsValuation ReportFile uploadNoOptional attachment - PDF or image of valuation docPolicy Start DateDateYesPolicy End DateDateYesAuto-set to Start Date + 1 year; editablePolicy NumberTextNoEntered once insurer issues it; can be added later
+Field
+Type
+Required
+Notes
+Cover Type
+Select
+Yes
+Comprehensive / TPO / TPFT (based on motor type)
+Vehicle Value / Sum Insured (KES)
+Number - manual entry
+Yes
+Staff types this figure; drives all premium calculations
+Valuation Report
+File upload
+No
+Optional attachment - PDF or image of valuation doc
+Policy Start Date
+Date
+Yes
+
+Policy End Date
+Date
+Yes
+Auto-set to Start Date + 1 year; editable
+Policy Number
+Text
+No
+Entered once insurer issues it; can be added later
+
 2.5 Step 5 - Rate Entry
 ⚠️  Rates are not hardcoded. Staff configure a default rate per insurer in Settings. This rate auto-fills the field when the insurer is selected - but staff can always override it manually on the policy.
 
-FieldTypeRequiredNotesBasic Premium Rate (%)Number - editableYesAuto-filled from insurer default rate in Settings; overridableBasic Premium (KES)Calculated - read onlyAuto= Vehicle Value × Rate ÷ 100; updates live as rate is typedIRA Levy (0.45%)Calculated - read onlyAuto= 0.45% of Basic PremiumTraining Levy (0.2%)Calculated - read onlyAuto= 0.2% of Basic PremiumStamp DutyCalculated - read onlyAutoFixed KES 40PHCFCalculated - read onlyAutoFixed KES 100 (Police Hospital Compensation Fund)
+Field
+Type
+Required
+Notes
+Basic Premium Rate (%)
+Number - editable
+Yes
+Auto-filled from insurer default rate in Settings; overridable
+Basic Premium (KES)
+Calculated - read only
+Auto
+= Vehicle Value × Rate ÷ 100; updates live as rate is typed
+IRA Levy (0.45%)
+Calculated - read only
+Auto
+= 0.45% of Basic Premium
+Training Levy (0.2%)
+Calculated - read only
+Auto
+= 0.2% of Basic Premium
+Stamp Duty
+Calculated - read only
+Auto
+Fixed KES 40
+PHCF
+Calculated - read only
+Auto
+Fixed KES 100 (Police Hospital Compensation Fund)
+
 2.6 Step 6 - Additional Benefits
 Staff select one or more benefits from a multi-select dropdown. For each selected benefit, a manual amount field (KES) appears inline. All selected benefit amounts are summed and added to the total premium.
 
 Benefits appear in the dropdown in this order:
-#Benefit NameAmount EntryNotes1Courtesy CarManual KES amount per policyReplacement vehicle during repair2Anti-Violence / Political Violence CoverManual KES amount per policyPVTC extension3Excess ProtectorManual KES amount per policyWaives compulsory excess on claims4Windscreen CoverManual KES amount per policySpecified or unlimited value5Personal Accident - DriverManual KES amount per policyPA cover for driver6Personal Accident - PassengersManual KES amount per policyPA cover for all passengers7Medical Expenses ExtensionManual KES amount per policy8Loss of Use / Car HireManual KES amount per policyDaily rate × days or lump sum9Third Party Property Damage IncreaseManual KES amount per policyAbove statutory TPPD minimum10Riot & Strike CoverManual KES amount per policyRSA extension+Custom benefit (from Settings)Manual KES amount per policyAdmin adds custom benefits in Settings page
+#
+Benefit Name
+Amount Entry
+Notes
+1
+Courtesy Car
+Manual KES amount per policy
+Replacement vehicle during repair
+2
+Anti-Violence / Political Violence Cover
+Manual KES amount per policy
+PVTC extension
+3
+Excess Protector
+Manual KES amount per policy
+Waives compulsory excess on claims
+4
+Windscreen Cover
+Manual KES amount per policy
+Specified or unlimited value
+5
+Personal Accident - Driver
+Manual KES amount per policy
+PA cover for driver
+6
+Personal Accident - Passengers
+Manual KES amount per policy
+PA cover for all passengers
+7
+Medical Expenses Extension
+Manual KES amount per policy
+
+8
+Loss of Use / Car Hire
+Manual KES amount per policy
+Daily rate × days or lump sum
+9
+Third Party Property Damage Increase
+Manual KES amount per policy
+Above statutory TPPD minimum
+10
+Riot & Strike Cover
+Manual KES amount per policy
+RSA extension
++
+Custom benefit (from Settings)
+Manual KES amount per policy
+Admin adds custom benefits in Settings page
+
 ⚠️  The Settings page includes a Benefits Manager where the admin can add, rename, or deactivate benefit options. This keeps the dropdown up to date without code changes.
 
 2.7 Step 7 - Premium Summary & Payment Setup
 The final step shows a complete itemized premium breakdown and the staff selects the payment arrangement:
 
-Line ItemSourceVehicle Value (Sum Insured)Manual entry - Step 4Basic Premium RateFrom Settings default or manual override - Step 5Basic Premium (KES)Calculated: Value × Rate ÷ 100Additional Benefits (itemized)Each selected benefit + manual amount - Step 6Total Benefits (KES)Sum of all benefit amountsIRA Levy (0.45%)Calculated on Basic PremiumTraining Levy (0.2%)Calculated on Basic PremiumStamp DutyFixed KES 40PHCFFixed KES 100GRAND TOTAL PREMIUM (KES)Sum of all lines above - bold, highlighted
+Line Item
+Source
+Vehicle Value (Sum Insured)
+Manual entry - Step 4
+Basic Premium Rate
+From Settings default or manual override - Step 5
+Basic Premium (KES)
+Calculated: Value × Rate ÷ 100
+Additional Benefits (itemized)
+Each selected benefit + manual amount - Step 6
+Total Benefits (KES)
+Sum of all benefit amounts
+IRA Levy (0.45%)
+Calculated on Basic Premium
+Training Levy (0.2%)
+Calculated on Basic Premium
+Stamp Duty
+Fixed KES 40
+PHCF
+Fixed KES 100
+GRAND TOTAL PREMIUM (KES)
+Sum of all lines above - bold, highlighted
+
 Payment mode selection:
 • Full Payment - single amount due immediately
 • 2 Installments - system splits 50% / 50% and sets due dates
@@ -114,13 +461,48 @@ The calculator is both embedded in the policy creation flow (Steps 4-7) and avai
 
 3.3 Insurer Rate Settings
 In the Settings → Insurers page, each insurer record stores:
-FieldDescriptionInsurer Namee.g. Jubilee, APA, Britam, CIC, AAR, Sanlam, GA InsuranceDefault Rate - Motor Private (%)Auto-fills rate field when this insurer is selected on a private motor policyDefault Rate - Motor Commercial (%)Auto-fills for commercial policiesDefault Rate - PSV (%)Auto-fills for PSV/Matatu policiesMinimum Premium - Motor Private (KES)Floor premium; applied if calculated amount is lowerMinimum Premium - Motor Commercial (KES)Minimum Premium - PSV (KES)Commission Rate (%)Agency commission; used in commission reports and dashboardIs ActiveToggle to hide/show insurer in dropdowns⚠️  All rate and minimum premium fields are pre-populated when a new insurer is added, but every field is editable by admin at any time. Rate changes only affect new policies - existing policies retain the rate recorded at the time of creation.
+Field
+Description
+Insurer Name
+e.g. Jubilee, APA, Britam, CIC, AAR, Sanlam, GA Insurance
+Default Rate - Motor Private (%)
+Auto-fills rate field when this insurer is selected on a private motor policy
+Default Rate - Motor Commercial (%)
+Auto-fills for commercial policies
+Default Rate - PSV (%)
+Auto-fills for PSV/Matatu policies
+Minimum Premium - Motor Private (KES)
+Floor premium; applied if calculated amount is lower
+Minimum Premium - Motor Commercial (KES)
+
+Minimum Premium - PSV (KES)
+
+Commission Rate (%)
+Agency commission; used in commission reports and dashboard
+Is Active
+Toggle to hide/show insurer in dropdowns
+⚠️  All rate and minimum premium fields are pre-populated when a new insurer is added, but every field is editable by admin at any time. Rate changes only affect new policies - existing policies retain the rate recorded at the time of creation.
 
 
 
 Module 4: Payment Management
 4.1 Payment Modes
-ModeDescriptionSystem BehaviourFull Payment100% of Grand Total paid upfrontSingle payment record; mark paid; generate receipt PDF2 InstallmentsGrand Total split into 2 equal partsAuto-calculate 50%/50%; set 2 due dates; schedule reminders3 InstallmentsGrand Total split into 3 partsAuto-calculate 33.3%/33.3%/33.4%; set 3 due dates; remindersIPFFinanced via external IPF providerRecord provider name, loan reference, repayment schedule manually
+Mode
+Description
+System Behaviour
+Full Payment
+100% of Grand Total paid upfront
+Single payment record; mark paid; generate receipt PDF
+2 Installments
+Grand Total split into 2 equal parts
+Auto-calculate 50%/50%; set 2 due dates; schedule reminders
+3 Installments
+Grand Total split into 3 parts
+Auto-calculate 33.3%/33.3%/33.4%; set 3 due dates; reminders
+IPF
+Financed via external IPF provider
+Record provider name, loan reference, repayment schedule manually
+
 4.2 Installment Schedule Rules
 • First installment: due on policy start date (staff can override)
 • Subsequent installments: spaced 30 days apart by default (configurable in Settings)
@@ -130,7 +512,22 @@ ModeDescriptionSystem BehaviourFull Payment100% of Grand Total paid upfront
 
 4.3 Payment Reminder Emails (Resend)
 A daily Vercel Cron Job runs at 8:00 AM EAT and checks for upcoming payment due dates. Emails are sent via Resend using branded HTML templates.
-TriggerRecipientTemplate10 days before due dateCustomer emailFriendly reminder: KES X due on [date]3 days before due dateCustomer emailUrgent: payment due in 3 days2 days before due dateCustomer email + StaffFinal reminder: payment due tomorrowPolicy expiry dayStaff + CustomerPolicy expires today - renewal required• All sent emails logged in notification_log table with timestamp and delivery status
+Trigger
+Recipient
+Template
+10 days before due date
+Customer email
+Friendly reminder: KES X due on [date]
+3 days before due date
+Customer email
+Urgent: payment due in 3 days
+2 days before due date
+Customer email + Staff
+Final reminder: payment due tomorrow
+Policy expiry day
+Staff + Customer
+Policy expires today - renewal required
+• All sent emails logged in notification_log table with timestamp and delivery status
 • If customer has no email on record, reminder is skipped and flagged on the policy record for manual follow-up
 
 4.4 Payment Receipt PDF
@@ -146,9 +543,39 @@ Generated on every payment recording. Contents:
 Module 5: Cover Tracking & Documentation
 5.1 Policy-Level Document Tracker
 Each policy has its own document checklist separate from customer documents. Logbook lives here, not on the customer record.
-DocumentStatus OptionsLogbook (original or certified copy)Pending / Received / Verified / Not RequiredValuation ReportPending / Received / Verified / Not RequiredProposal Form (signed)Pending / Received / Verified / Not RequiredPrevious Policy (renewals)Pending / Received / Verified / Not RequiredAdditional document (custom label)Pending / Received / Verified / Not Required
+Document
+Status Options
+Logbook (original or certified copy)
+Pending / Received / Verified / Not Required
+Valuation Report
+Pending / Received / Verified / Not Required
+Proposal Form (signed)
+Pending / Received / Verified / Not Required
+Previous Policy (renewals)
+Pending / Received / Verified / Not Required
+Additional document (custom label)
+Pending / Received / Verified / Not Required
+
 5.2 Cover Tracking Pipeline
-StageHow SetTimestampCover RecordedAuto-set when policy is savedSystem timestampDocuments PendingAuto-set based on doc trackerSystem timestampFully DocumentedAuto-flagged when all required docs = Received/VerifiedSystem timestampSubmitted to InsurerStaff marks manuallyStaff-entered datePolicy Issued / ApprovedStaff marks; enters policy numberStaff-entered date
+Stage
+How Set
+Timestamp
+Cover Recorded
+Auto-set when policy is saved
+System timestamp
+Documents Pending
+Auto-set based on doc tracker
+System timestamp
+Fully Documented
+Auto-flagged when all required docs = Received/Verified
+System timestamp
+Submitted to Insurer
+Staff marks manually
+Staff-entered date
+Policy Issued / Approved
+Staff marks; enters policy number
+Staff-entered date
+
 5.3 Turnaround Time Calculations
 • Cover Recorded → Fully Documented: days calculated automatically
 • Fully Documented → Submitted to Insurer: days calculated automatically
@@ -167,9 +594,78 @@ StageHow SetTimestampCover RecordedAuto-set when policy is savedSystem time
 
 Module 6: Claims Management
 6.1 Claim Stages
-StageDescriptionKey ActionReportedCustomer reports the incidentRecord date, nature of loss, accident details, third party infoDocuments PendingOutstanding docs listedStaff specifies each required documentFully DocumentedAll required docs receivedAuto-flagged; turnaround timer startsAssessedLoss assessor inspection doneRecord assessor name, date, preliminary estimate (KES)ExecutedRepair / settlement authorizedAssign garage, record repair scope and authorized amountApprovedInsurer approves claimRecord approval reference and approved amount (KES)Released / SettledPayment released or vehicle returnedRecord settlement amount, date, payment method
+Stage
+Description
+Key Action
+Reported
+Customer reports the incident
+Record date, nature of loss, accident details, third party info
+Documents Pending
+Outstanding docs listed
+Staff specifies each required document
+Fully Documented
+All required docs received
+Auto-flagged; turnaround timer starts
+Assessed
+Loss assessor inspection done
+Record assessor name, date, preliminary estimate (KES)
+Executed
+Repair / settlement authorized
+Assign garage, record repair scope and authorized amount
+Approved
+Insurer approves claim
+Record approval reference and approved amount (KES)
+Released / Settled
+Payment released or vehicle returned
+Record settlement amount, date, payment method
+
 6.2 Claim Record Fields
-FieldTypeNotesClaim NumberAuto-generatede.g. CLM-2025-0001Linked PolicyDropdown / searchLinks to motor policy; auto-populates customer and vehicleDate of LossDateWhen accident / incident occurredDate ReportedDateWhen customer reported to agencyNature of LossSelectAccident / Theft / Fire / Flood / Vandalism / OtherAccident LocationTextThird Party Involved?Yes / NoIf Yes: capture name, phone, vehicle reg, insurerPolice Abstract NumberTextCurrent StageSelect (from pipeline)Updated by staff as claim progressesAssigned GarageSelect from Garage Register or free textRepair Estimate (KES)NumberEntered after assessmentApproved Amount (KES)NumberEntered after insurer approvalSettlement DateDateNotes / Follow-up LogMulti-entry logTimestamped notes per staff member
+Field
+Type
+Notes
+Claim Number
+Auto-generated
+e.g. CLM-2025-0001
+Linked Policy
+Dropdown / search
+Links to motor policy; auto-populates customer and vehicle
+Date of Loss
+Date
+When accident / incident occurred
+Date Reported
+Date
+When customer reported to agency
+Nature of Loss
+Select
+Accident / Theft / Fire / Flood / Vandalism / Other
+Accident Location
+Text
+
+Third Party Involved?
+Yes / No
+If Yes: capture name, phone, vehicle reg, insurer
+Police Abstract Number
+Text
+
+Current Stage
+Select (from pipeline)
+Updated by staff as claim progresses
+Assigned Garage
+Select from Garage Register or free text
+
+Repair Estimate (KES)
+Number
+Entered after assessment
+Approved Amount (KES)
+Number
+Entered after insurer approval
+Settlement Date
+Date
+
+Notes / Follow-up Log
+Multi-entry log
+Timestamped notes per staff member
+
 6.3 Claims Document Tracker
 • Police Abstract
 • Completed Claim Form
@@ -216,23 +712,278 @@ Finance Summary
 • Revenue by insurer - pie chart
 
 7.2 Demographics Charts
-MetricChart TypeBreakdownCustomers by GenderPie chartMale / Female / OtherCustomers by County / AreaBar chartTop 10 areasPolicies by Insurance TypeDonut chartMotor Private / Commercial / PSV / Fire / Medical / etc.Policies by Cover TypeDonut chartComprehensive / TPO / TPFTPolicies by InsurerBar chartAll insurers side by sideClaims by GarageBar chartTop garages by claim countClaims by Nature of LossPie chartAccident / Theft / Fire / OtherInsurer PerformanceTableAvg approval turnaround, claim settlement ratio per insurerMonthly Policy VolumeLine chartNew policies per month, trailing 12 months
+Metric
+Chart Type
+Breakdown
+Customers by Gender
+Pie chart
+Male / Female / Other
+Customers by County / Area
+Bar chart
+Top 10 areas
+Policies by Insurance Type
+Donut chart
+Motor Private / Commercial / PSV / Fire / Medical / etc.
+Policies by Cover Type
+Donut chart
+Comprehensive / TPO / TPFT
+Policies by Insurer
+Bar chart
+All insurers side by side
+Claims by Garage
+Bar chart
+Top garages by claim count
+Claims by Nature of Loss
+Pie chart
+Accident / Theft / Fire / Other
+Insurer Performance
+Table
+Avg approval turnaround, claim settlement ratio per insurer
+Monthly Policy Volume
+Line chart
+New policies per month, trailing 12 months
+
 7.3 Reports
-ReportContentsExportPolicy RegisterAll active policies: status, insurer, value, premium, expiryCSV + PDFRenewal Due ReportPolicies expiring in 30 / 60 / 90 daysCSV + PDFPayment CollectionInstallment status, collected vs outstanding by periodCSVCommission ReportCommission per insurer per month, YTD summaryCSV + PDFClaims RegisterAll claims: stage, dates, amounts, garageCSV + PDFDocumentation CompliancePolicies and claims with incomplete docsCSVInsurer PerformanceTurnaround times, approval rates per insurerCSV + PDFCustomer DemographicsGender, area, cover type breakdownsCSV
+Report
+Contents
+Export
+Policy Register
+All active policies: status, insurer, value, premium, expiry
+CSV + PDF
+Renewal Due Report
+Policies expiring in 30 / 60 / 90 days
+CSV + PDF
+Payment Collection
+Installment status, collected vs outstanding by period
+CSV
+Commission Report
+Commission per insurer per month, YTD summary
+CSV + PDF
+Claims Register
+All claims: stage, dates, amounts, garage
+CSV + PDF
+Documentation Compliance
+Policies and claims with incomplete docs
+CSV
+Insurer Performance
+Turnaround times, approval rates per insurer
+CSV + PDF
+Customer Demographics
+Gender, area, cover type breakdowns
+CSV
+
 
 
 3. Database Schema (Neon DB / PostgreSQL)
 All tables include id (UUID), created_at, and updated_at. Foreign keys enforce referential integrity. Drizzle ORM is used for all queries.
 
-TableKey FieldsRelationshipscustomersfirst_name, last_name, phone, email, id_number, gender, county, customer_type, company_namehas_many: policies, customer_documents, followup_notescustomer_documentscustomer_id, doc_type (ID|PASSPORT|KRA|OTHER), file_url, blob_key, doc_label, status, uploaded_atbelongs_to: customersinsurersname, is_active, commission_rate, rate_motor_private, rate_motor_commercial, rate_psv, min_premium_private, min_premium_commercial, min_premium_psvhas_many: policiesbenefit_optionsname, is_active, sort_orderConfigurable benefit dropdown itemspoliciescustomer_id, insurer_id, insurance_type, cover_type, policy_number, start_date, end_date, sum_insured, basic_rate, basic_premium, total_benefits, ira_levy, training_levy, stamp_duty, phcf, grand_total, payment_mode, statushas_many: vehicles, policy_benefits, payments, policy_documents, tracking_entries, claims, followup_notesvehiclespolicy_id, make, model, year, cc, tonnage, seats, chassis_no, engine_no, reg_no, body_type, colour, logbook_url, logbook_blob_keybelongs_to: policiespolicy_benefitspolicy_id, benefit_option_id, benefit_name, amount_kesbelongs_to: policies, benefit_optionspaymentspolicy_id, installment_number, total_installments, amount_due, amount_paid, due_date, paid_date, payment_method, reference_no, status (pending|partial|paid), receipt_urlbelongs_to: policiesnotification_logpolicy_id, payment_id, notification_type, sent_to_email, sent_at, status (sent|failed|skipped)policy_trackingpolicy_id, stage, stage_date, notes, staff_idbelongs_to: policiespolicy_documentspolicy_id, doc_type (LOGBOOK|VALUATION|PROPOSAL|PREVIOUS_POLICY|OTHER), doc_label, status, file_url, received_datebelongs_to: policiesfollowup_notespolicy_id (nullable), claim_id (nullable), customer_id (nullable), note_date, channel, notes, next_followup_date, staff_idPolymorphic: attached to policy, claim, or customerclaimspolicy_id, claim_number, date_of_loss, date_reported, nature_of_loss, location, third_party_involved, third_party_details, police_abstract, stage, garage_id, repair_estimate, approved_amount, settlement_date, settlement_methodbelongs_to: policies; has_many: claim_documents, garage_updates, followup_notesclaim_documentsclaim_id, doc_type, status, received_datebelongs_to: claimsgaragesname, location, county, contact_person, phone, is_activehas_many: claimsgarage_updatesclaim_id, parts_ordered (JSONB), parts_received (JSONB), progress_pct, expected_completion, delay_reason, notes, update_datebelongs_to: claimsusersname, email, password_hash, role (admin), is_activeStaff login
+Table
+Key Fields
+Relationships
+customers
+first_name, last_name, phone, email, id_number, gender, county, customer_type, company_name
+has_many: policies, customer_documents, followup_notes
+customer_documents
+customer_id, doc_type (ID|PASSPORT|KRA|OTHER), file_url, blob_key, doc_label, status, uploaded_at
+belongs_to: customers
+insurers
+name, is_active, commission_rate, rate_motor_private, rate_motor_commercial, rate_psv, min_premium_private, min_premium_commercial, min_premium_psv
+has_many: policies
+benefit_options
+name, is_active, sort_order
+Configurable benefit dropdown items
+policies
+customer_id, insurer_id, insurance_type, cover_type, policy_number, start_date, end_date, sum_insured, basic_rate, basic_premium, total_benefits, ira_levy, training_levy, stamp_duty, phcf, grand_total, payment_mode, status
+has_many: vehicles, policy_benefits, payments, policy_documents, tracking_entries, claims, followup_notes
+vehicles
+policy_id, make, model, year, cc, tonnage, seats, chassis_no, engine_no, reg_no, body_type, colour, logbook_url, logbook_blob_key
+belongs_to: policies
+policy_benefits
+policy_id, benefit_option_id, benefit_name, amount_kes
+belongs_to: policies, benefit_options
+payments
+policy_id, installment_number, total_installments, amount_due, amount_paid, due_date, paid_date, payment_method, reference_no, status (pending|partial|paid), receipt_url
+belongs_to: policies
+notification_log
+policy_id, payment_id, notification_type, sent_to_email, sent_at, status (sent|failed|skipped)
+
+policy_tracking
+policy_id, stage, stage_date, notes, staff_id
+belongs_to: policies
+policy_documents
+policy_id, doc_type (LOGBOOK|VALUATION|PROPOSAL|PREVIOUS_POLICY|OTHER), doc_label, status, file_url, received_date
+belongs_to: policies
+followup_notes
+policy_id (nullable), claim_id (nullable), customer_id (nullable), note_date, channel, notes, next_followup_date, staff_id
+Polymorphic: attached to policy, claim, or customer
+claims
+policy_id, claim_number, date_of_loss, date_reported, nature_of_loss, location, third_party_involved, third_party_details, police_abstract, stage, garage_id, repair_estimate, approved_amount, settlement_date, settlement_method
+belongs_to: policies; has_many: claim_documents, garage_updates, followup_notes
+claim_documents
+claim_id, doc_type, status, received_date
+belongs_to: claims
+garages
+name, location, county, contact_person, phone, is_active
+has_many: claims
+garage_updates
+claim_id, parts_ordered (JSONB), parts_received (JSONB), progress_pct, expected_completion, delay_reason, notes, update_date
+belongs_to: claims
+users
+name, email, password_hash, role (admin), is_active
+Staff login
+
 
 
 4. API Routes
-MethodRouteDescriptionPOST/api/auth/loginNextAuth credentials loginGET/POST/api/customersList (paginated/search) or create customerGET/PUT/api/customers/[id]Get or update customerPOST/api/customers/[id]/documentsUpload document to Vercel BlobGET/POST/api/policiesList or create policyGET/PUT/api/policies/[id]Get or update policyPOST/api/policies/[id]/paymentsRecord a paymentGET/api/policies/[id]/paymentsGet installment schedulePOST/api/policies/[id]/trackingUpdate cover tracking stagePOST/api/policies/[id]/notesAdd follow-up notePOST/api/calculator/premiumCalculate premium from inputs (stateless)GET/POST/api/claimsList or create claimGET/PUT/api/claims/[id]Get or update claimPOST/api/claims/[id]/notesAdd claim follow-up notePOST/api/claims/[id]/garage-updateLog garage parts/progress updateGET/api/dashboard/summaryAll dashboard KPI dataGET/api/dashboard/expiringPolicies expiring in X daysGET/api/dashboard/claims-alertsClaims near 30-day markGET/api/reports/[type]Generate report data (filterable)GET/api/pdf/receipt/[paymentId]Generate payment receipt PDFGET/api/pdf/claim/[claimId]Generate claim summary PDFPOST/api/cron/notificationsDaily cron job - send Resend remindersGET/POST/api/insurersList or add insurerPUT/api/insurers/[id]Edit insurer rates and commissionGET/POST/api/garagesList or add garageGET/POST/api/benefitsList or add benefit optionsPUT/api/benefits/[id]Edit or deactivate a benefit option
+Method
+Route
+Description
+POST
+/api/auth/login
+NextAuth credentials login
+GET/POST
+/api/customers
+List (paginated/search) or create customer
+GET/PUT
+/api/customers/[id]
+Get or update customer
+POST
+/api/customers/[id]/documents
+Upload document to Vercel Blob
+GET/POST
+/api/policies
+List or create policy
+GET/PUT
+/api/policies/[id]
+Get or update policy
+POST
+/api/policies/[id]/payments
+Record a payment
+GET
+/api/policies/[id]/payments
+Get installment schedule
+POST
+/api/policies/[id]/tracking
+Update cover tracking stage
+POST
+/api/policies/[id]/notes
+Add follow-up note
+POST
+/api/calculator/premium
+Calculate premium from inputs (stateless)
+GET/POST
+/api/claims
+List or create claim
+GET/PUT
+/api/claims/[id]
+Get or update claim
+POST
+/api/claims/[id]/notes
+Add claim follow-up note
+POST
+/api/claims/[id]/garage-update
+Log garage parts/progress update
+GET
+/api/dashboard/summary
+All dashboard KPI data
+GET
+/api/dashboard/expiring
+Policies expiring in X days
+GET
+/api/dashboard/claims-alerts
+Claims near 30-day mark
+GET
+/api/reports/[type]
+Generate report data (filterable)
+GET
+/api/pdf/receipt/[paymentId]
+Generate payment receipt PDF
+GET
+/api/pdf/claim/[claimId]
+Generate claim summary PDF
+POST
+/api/cron/notifications
+Daily cron job - send Resend reminders
+GET/POST
+/api/insurers
+List or add insurer
+PUT
+/api/insurers/[id]
+Edit insurer rates and commission
+GET/POST
+/api/garages
+List or add garage
+GET/POST
+/api/benefits
+List or add benefit options
+PUT
+/api/benefits/[id]
+Edit or deactivate a benefit option
+
 
 
 5. Page Structure
-RoutePageKey UI/loginLoginEmail + password/DashboardKPI cards, alerts, charts/customersCustomer ListSearch, filter, table/customers/newNew CustomerOnboarding form + optional doc uploads/customers/[id]Customer ProfileDetails, linked policies, documents, notes/customers/[id]/editEdit CustomerPre-filled edit form/policiesPolicy ListFilter by type, insurer, status, expiry/policies/newNew Policy7-step stepper: type → insurer → vehicle → cover → rate → benefits → payment/policies/[id]Policy DetailFull view: tracking pipeline, payments, docs, notes/policies/[id]/paymentRecord PaymentPayment form + installment schedule/calculatorPremium CalculatorStandalone quick quote tool/claimsClaims ListFilter by stage, insurer, date/claims/newNew ClaimLink to policy, capture incident/claims/[id]Claim DetailStage tracker, docs, garage log, notes, PDF/reportsReports HubSelect report, date range, filters, export/settingsSettings HomeLinks to all settings sections/settings/insurersInsurer ManagementAdd/edit insurers, rates, commission %/settings/benefitsBenefits ManagerAdd/rename/deactivate benefit dropdown options/settings/garagesGarage RegisterAdd/edit preferred garages
+Route
+Page
+Key UI
+/login
+Login
+Email + password
+/
+Dashboard
+KPI cards, alerts, charts
+/customers
+Customer List
+Search, filter, table
+/customers/new
+New Customer
+Onboarding form + optional doc uploads
+/customers/[id]
+Customer Profile
+Details, linked policies, documents, notes
+/customers/[id]/edit
+Edit Customer
+Pre-filled edit form
+/policies
+Policy List
+Filter by type, insurer, status, expiry
+/policies/new
+New Policy
+7-step stepper: type → insurer → vehicle → cover → rate → benefits → payment
+/policies/[id]
+Policy Detail
+Full view: tracking pipeline, payments, docs, notes
+/policies/[id]/payment
+Record Payment
+Payment form + installment schedule
+/calculator
+Premium Calculator
+Standalone quick quote tool
+/claims
+Claims List
+Filter by stage, insurer, date
+/claims/new
+New Claim
+Link to policy, capture incident
+/claims/[id]
+Claim Detail
+Stage tracker, docs, garage log, notes, PDF
+/reports
+Reports Hub
+Select report, date range, filters, export
+/settings
+Settings Home
+Links to all settings sections
+/settings/insurers
+Insurer Management
+Add/edit insurers, rates, commission %
+/settings/benefits
+Benefits Manager
+Add/rename/deactivate benefit dropdown options
+/settings/garages
+Garage Register
+Add/edit preferred garages
+
 
 
 6. Recommended Build Phases
@@ -284,7 +1035,40 @@ Phase 6 - Polish & Launch (Week 12)
 
 
 7. Environment Variables
-VariablePurposeWhere to GetDATABASE_URLNeon DB pooled connection stringneon.tech → project → connection stringDATABASE_URL_UNPOOLEDNeon DB direct (for Drizzle migrations)neon.tech → project → direct connectionNEXTAUTH_SECRETJWT signing secretRun: openssl rand -base64 32NEXTAUTH_URLApp base URLe.g. https://besure-insurance.vercel.appBLOB_READ_WRITE_TOKENVercel Blob Storage accessVercel dashboard → Storage → BlobRESEND_API_KEYResend email sendingresend.com → API KeysRESEND_FROM_EMAILSender email addresse.g. noreply@youragency.co.keCRON_SECRETProtects /api/cron/notifications routeGenerate any random stringNEXT_PUBLIC_APP_NAMEDisplay name in UIBeSure Insurance SolutionsNEXT_PUBLIC_AGENCY_NAMEAgency name in PDF headers/footersYour agency name
+Variable
+Purpose
+Where to Get
+DATABASE_URL
+Neon DB pooled connection string
+neon.tech → project → connection string
+DATABASE_URL_UNPOOLED
+Neon DB direct (for Drizzle migrations)
+neon.tech → project → direct connection
+NEXTAUTH_SECRET
+JWT signing secret
+Run: openssl rand -base64 32
+NEXTAUTH_URL
+App base URL
+e.g. https://besure-insurance.vercel.app
+BLOB_READ_WRITE_TOKEN
+Vercel Blob Storage access
+Vercel dashboard → Storage → Blob
+RESEND_API_KEY
+Resend email sending
+resend.com → API Keys
+RESEND_FROM_EMAIL
+Sender email address
+e.g. noreply@youragency.co.ke
+CRON_SECRET
+Protects /api/cron/notifications route
+Generate any random string
+NEXT_PUBLIC_APP_NAME
+Display name in UI
+Myloe Insurance Agency
+NEXT_PUBLIC_AGENCY_NAME
+Agency name in PDF headers/footers
+Your agency name
+
 
 
 8. Getting Started
@@ -301,7 +1085,7 @@ Recommended first commands:
 10. Start Phase 1: Customer module
 
 The architecture is clean, the scope is well-defined, and every decision in this document has been made with the Kenyan insurance market in mind. Build phase by phase and you will have a production-ready system in 12 weeks.
-BeSure Insurance Solutions  | Insurance Agency Management System    Project Specification v2.0
+Myloe Insurance Agency  | Insurance Agency Management System    Project Specification v2.0
 
-Confidential - BeSure Insurance Solutions Project Specification v2.0
+Confidential - Myloe Insurance Agency Project Specification v2.0
 

@@ -8,11 +8,11 @@ import { eq } from "drizzle-orm";
 import { uploadToCloudinary, deleteFromCloudinary, type CloudinaryFolder } from "@/lib/cloudinary";
 
 const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
-  LOGBOOK: "besure/policies/logbooks",
-  VALUATION: "besure/policies/valuations",
-  PROPOSAL: "besure/policies/valuations",
-  PREVIOUS_POLICY: "besure/policies/valuations",
-  OTHER: "besure/policies/valuations",
+  LOGBOOK: "myloe/policies/logbooks",
+  VALUATION: "myloe/policies/valuations",
+  PROPOSAL: "myloe/policies/valuations",
+  PREVIOUS_POLICY: "myloe/policies/valuations",
+  OTHER: "myloe/policies/valuations",
 };
 
 // POST /api/policies/[id]/documents
@@ -48,7 +48,7 @@ export async function POST(
     if (file && file.size > 0) {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const folder = DOC_FOLDER_MAP[docType] || "besure/policies/valuations";
+      const folder = DOC_FOLDER_MAP[docType] || "myloe/policies/valuations";
       const filename = `policy_${id}_${docType}_${Date.now()}`;
 
       const result = await uploadToCloudinary(buffer, folder, filename);

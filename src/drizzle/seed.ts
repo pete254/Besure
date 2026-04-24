@@ -1,4 +1,4 @@
-// BeSure Insurance Solutions — Database Seed v2.2
+// Myloe Insurance Agency — Database Seed v2.3
 // Run: npx tsx src/drizzle/seed.ts
 // Seeds: insurers, benefit options (per insurance type group), default admin user
 
@@ -7,13 +7,13 @@ dotenv.config({ path: ".env.local" });
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { Pool } from "@neondatabase/serverless";
 import * as schema from "./schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
 const db = drizzle(pool, { schema });
 
 async function seed() {
-  console.log("🌱 Seeding BeSure database v2.2...\n");
+  console.log("🌱 Seeding Myloe database v2.3...\n");
 
   // ─── INSURERS ───────────────────────────────────────────────
   console.log("Seeding insurers...");
@@ -115,21 +115,15 @@ async function seed() {
   // ─── BENEFIT OPTIONS ────────────────────────────────────────
   console.log("\nSeeding benefit options...");
 
-  // First deactivate ALL existing benefits — we'll re-seed cleanly
-  await db
-    .update(schema.benefitOptions)
-    .set({ isActive: false });
+  // First: deactivate ALL — then upsert by (name + applicableTo) key
+  await db.update(schema.benefitOptions).set({ isActive: false });
   console.log("  Deactivated all existing benefits for clean re-seed");
 
-  // ── PRIVATE COMP benefits (applicableTo: "private") ──────────
-  // Political Violence Cover — 0.25% of value
-  // Excess Protector — 0.25% of value
-  // Windscreen Cover — default 50000, editable
-  // Personal Accident (driver) — default 5000
-  // Loss of Use / Car Hire — 10d=3000, 20d=6000, 30d=9000
-  // Infotainment Unit — default 50000, editable
+  // Get all current benefits for dedup lookup
+  const allExisting = await db.select().from(schema.benefitOptions);
 
-  const privateCommonBenefits: schema.NewBenefitOption[] = [
+  const benefitsToSeed: schema.NewBenefitOption[] = [
+    // ── PRIVATE ──────────────────────────────────────────────
     {
       name: "Political Violence Cover",
       isActive: true,
@@ -172,17 +166,7 @@ async function seed() {
       applicableTo: "private",
       calcConfig: { type: "infotainment", defaultValue: 50000 },
     },
-  ];
-
-  // ── COMMERCIAL / PSV / INSTITUTIONAL / TSV benefits (applicableTo: "commercial") ──
-  // Political Violence Cover — 0.35% of value
-  // Excess Protector — 0.5% of value
-  // Windscreen Cover — default 50000, editable
-  // Personal Accident (driver) — default 5000
-  // PLL — default 1000, editable
-  // Entertainment Unit — default 50000, editable
-
-  const commercialBenefits: schema.NewBenefitOption[] = [
+    // ── COMMERCIAL ───────────────────────────────────────────
     {
       name: "Political Violence Cover",
       isActive: true,
@@ -227,16 +211,10 @@ async function seed() {
     },
   ];
 
-  for (const benefit of [...privateCommonBenefits, ...commercialBenefits]) {
-    // Check if a matching active benefit already exists (name + applicableTo)
-    const existing = await db
-      .select()
-      .from(schema.benefitOptions)
-      .where(eq(schema.benefitOptions.name, benefit.name));
-
-    // Find exact match by name + applicableTo
-    const exactMatch = existing.find(
-      (e) => (e as any).applicableTo === benefit.applicableTo
+  for (const benefit of benefitsToSeed) {
+    // Match by BOTH name AND applicableTo — this is the dedup key
+    const exactMatch = allExisting.find(
+      (e) => e.name === benefit.name && (e as any).applicableTo === benefit.applicableTo
     );
 
     if (exactMatch) {
@@ -252,21 +230,20 @@ async function seed() {
       console.log(`  ♻️  Updated: ${benefit.name} (${benefit.applicableTo})`);
     } else {
       await db.insert(schema.benefitOptions).values(benefit);
-      console.log(`  ✅ ${benefit.name} (${benefit.applicableTo})`);
+      console.log(`  ✅ Inserted: ${benefit.name} (${benefit.applicableTo})`);
     }
   }
 
   // ─── DEFAULT ADMIN USER ─────────────────────────────────────
   console.log("\nSeeding default admin user...");
 
-  const adminEmail = "admin@besure.co.ke";
+  const adminEmail = "admin@myloe.co.ke";
   const existingAdmin = await db
     .select()
     .from(schema.users)
     .where(eq(schema.users.email, adminEmail));
 
   if (existingAdmin.length === 0) {
-    // Default password: BeSure2025! — CHANGE IMMEDIATELY after first login
     await db.insert(schema.users).values({
       name: "System Admin",
       email: adminEmail,
@@ -274,7 +251,7 @@ async function seed() {
       role: "admin",
       isActive: true,
     });
-    console.log("  ✅ Admin user created: admin@besure.co.ke");
+    console.log("  ✅ Admin user created: admin@myloe.co.ke");
     console.log("  ⚠️  Update password hash before deploying to production!");
   } else {
     console.log("  ⏭️  Admin user already exists");
