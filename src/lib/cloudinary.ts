@@ -92,6 +92,62 @@ export function getSignedUrl(publicId: string, expiresInSeconds = 3600): string 
   });
 }
 
+/**
+ * Generate a public URL for PDFs and documents with proper delivery settings.
+ * PDFs may require special handling; this ensures inline viewing works.
+ */
+export function getPdfUrl(publicId: string): string {
+  return cloudinary.url(publicId, {
+    secure: true,
+    format: "pdf",
+    fetch_format: "pdf",
+    resource_type: "auto",
+  });
+}
+
+/**
+ * Generate a temporary signed URL for PDF access (1 hour default).
+ * Use this if Cloudinary requires authentication for PDF delivery.
+ */
+export function getPdfSignedUrl(publicId: string, expiresInSeconds = 3600): string {
+  return cloudinary.url(publicId, {
+    secure: true,
+    format: "pdf",
+    fetch_format: "pdf",
+    sign_url: true,
+    type: "authenticated",
+    expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
+  });
+}
+
+/**
+ * Check if a Cloudinary URL is likely a signed URL and may need refreshing.
+ * Returns true if the URL contains signature parameters.
+ */
+export function isSignedUrl(url: string): boolean {
+  return url.includes("s_") && url.includes("signature");
+}
+
+/**
+ * Refresh a signed URL by generating a new one from the public ID.
+ * Extracts the public ID from a Cloudinary URL for regeneration.
+ */
+export function refreshSignedPdfUrl(url: string, expiresInSeconds = 3600): string | null {
+  try {
+    // Extract public ID from URL
+    // URL format: https://res.cloudinary.com/[cloud_name]/image/upload/[transformations]/[public_id]
+    const matches = url.match(/\/([^\/]+)(?:\?|$)/);
+    if (!matches || !matches[1]) return null;
+    
+    const publicId = matches[1].split("?")[0].split("#")[0];
+    if (!publicId) return null;
+    
+    return getPdfSignedUrl(publicId, expiresInSeconds);
+  } catch {
+    return null;
+  }
+}
+
 function sanitizeFilename(name: string): string {
   return name
     .replace(/\.[^/.]+$/, "") // strip extension

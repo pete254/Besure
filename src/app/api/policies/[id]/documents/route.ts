@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { policyDocuments, vehicles, policies } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { uploadToCloudinary, deleteFromCloudinary, type CloudinaryFolder } from "@/lib/cloudinary";
+import { uploadToCloudinary, deleteFromCloudinary, getPdfSignedUrl, isSignedUrl, refreshSignedPdfUrl, type CloudinaryFolder } from "@/lib/cloudinary";
 
 const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
   LOGBOOK: "myloe/policies/logbooks",
@@ -52,8 +52,14 @@ export async function POST(
       const filename = `policy_${id}_${docType}_${Date.now()}`;
 
       const result = await uploadToCloudinary(buffer, folder, filename);
-      fileUrl = result.secureUrl;
       publicId = result.publicId;
+      
+      // For PDFs, use signed URL; for other files use secure URL
+      if (file.type === "application/pdf" || filename.endsWith(".pdf")) {
+        fileUrl = getPdfSignedUrl(publicId);
+      } else {
+        fileUrl = result.secureUrl;
+      }
 
       // If it's a logbook, also update the vehicle record's logbook fields
       if (docType === "LOGBOOK") {
@@ -131,7 +137,19 @@ export async function GET(
       .select()
       .from(policyDocuments)
       .where(eq(policyDocuments.policyId, id));
-    return NextResponse.json({ documents: docs });
+    
+    // Refresh signed URLs if they're about to expire
+    const refreshedDocs = docs.map(doc => {
+      if (doc.fileUrl && isSignedUrl(doc.fileUrl)) {
+        const refreshedUrl = refreshSignedPdfUrl(doc.fileUrl);
+        if (refreshedUrl) {
+          return { ...doc, fileUrl: refreshedUrl };
+        }
+      }
+      return doc;
+    });
+    
+    return NextResponse.json({ documents: refreshedDocs });
   } catch (error) {
     console.error("GET /api/policies/[id]/documents error:", error);
     return NextResponse.json(

@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { customerDocuments, customers } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { uploadToCloudinary, deleteFromCloudinary, type CloudinaryFolder } from "@/lib/cloudinary";
+import { uploadToCloudinary, deleteFromCloudinary, getPdfSignedUrl, isSignedUrl, refreshSignedPdfUrl, type CloudinaryFolder } from "@/lib/cloudinary";
 
 const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
   ID: "myloe/customers/id",
@@ -54,8 +54,14 @@ export async function POST(
       const filename = `${id}_${docType}_${Date.now()}`;
 
       const result = await uploadToCloudinary(buffer, folder, filename);
-      fileUrl = result.secureUrl;
       publicId = result.publicId;
+      
+      // For PDFs, use signed URL; for other files use secure URL
+      if (file.type === "application/pdf" || filename.endsWith(".pdf")) {
+        fileUrl = getPdfSignedUrl(publicId);
+      } else {
+        fileUrl = result.secureUrl;
+      }
     }
 
     // Check if a document of this type already exists for this customer
@@ -137,7 +143,19 @@ export async function GET(
       .select()
       .from(customerDocuments)
       .where(eq(customerDocuments.customerId, id));
-    return NextResponse.json({ documents: docs });
+    
+    // Refresh signed URLs if they're about to expire
+    const refreshedDocs = docs.map(doc => {
+      if (doc.fileUrl && isSignedUrl(doc.fileUrl)) {
+        const refreshedUrl = refreshSignedPdfUrl(doc.fileUrl);
+        if (refreshedUrl) {
+          return { ...doc, fileUrl: refreshedUrl };
+        }
+      }
+      return doc;
+    });
+    
+    return NextResponse.json({ documents: refreshedDocs });
   } catch (error) {
     console.error("GET /api/customers/[id]/documents error:", error);
     return NextResponse.json(
