@@ -5,7 +5,8 @@
 "use client";
 
 import { useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, Eye } from "lucide-react";
+import PDFPreviewModal from "./PDFPreviewModal";
 
 interface RiskNoteButtonProps {
   policyId: string;
@@ -15,8 +16,10 @@ interface RiskNoteButtonProps {
 export default function RiskNoteButton({ policyId, policyNumber }: RiskNoteButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
 
-  async function handleDownload() {
+  async function generatePDF(preview = false) {
     setLoading(true);
     setError("");
     try {
@@ -26,14 +29,22 @@ export default function RiskNoteButton({ policyId, policyNumber }: RiskNoteButto
         return;
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `RiskNote-${policyNumber || policyId.slice(0, 8)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const fileName = `RiskNote-${policyNumber || policyId.slice(0, 8)}.pdf`;
+
+      if (preview) {
+        const blobUrl = URL.createObjectURL(blob);
+        setPdfBlobUrl(blobUrl);
+        setShowPreview(true);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -43,36 +54,81 @@ export default function RiskNoteButton({ policyId, policyNumber }: RiskNoteButto
 
   return (
     <div>
-      <button
-        onClick={handleDownload}
-        disabled={loading}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          padding: "8px 14px",
-          backgroundColor: loading ? "var(--brand-dim)" : "var(--brand)",
-          color: "#000000",
-          border: "none",
-          borderRadius: "8px",
-          fontSize: "13px",
-          fontWeight: 600,
-          cursor: loading ? "not-allowed" : "pointer",
-          transition: "opacity 0.15s",
-        }}
-        onMouseEnter={(e) => {
-          if (!loading) (e.currentTarget as HTMLElement).style.opacity = "0.85";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.opacity = "1";
-        }}
-      >
-        <FileText size={14} />
-        {loading ? "Generating PDF..." : "Download Risk Note"}
-      </button>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+        <button
+          onClick={() => generatePDF(true)}
+          disabled={loading}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px",
+            padding: "8px 14px",
+            backgroundColor: loading ? "var(--brand-dim)" : "var(--bg-app)",
+            color: "var(--brand)",
+            border: "1px solid var(--brand)",
+            borderRadius: "8px",
+            fontSize: "13px",
+            fontWeight: 600,
+            cursor: loading ? "not-allowed" : "pointer",
+            transition: "background-color 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--brand-dim)";
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-app)";
+          }}
+        >
+          <Eye size={14} />
+          {loading ? "Generating..." : "Preview"}
+        </button>
+        <button
+          onClick={() => generatePDF(false)}
+          disabled={loading}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px",
+            padding: "8px 14px",
+            backgroundColor: loading ? "var(--brand-dim)" : "var(--bg-app)",
+            color: "var(--brand)",
+            border: "1px solid var(--brand)",
+            borderRadius: "8px",
+            fontSize: "13px",
+            fontWeight: 600,
+            cursor: loading ? "not-allowed" : "pointer",
+            transition: "background-color 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--brand-dim)";
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-app)";
+          }}
+        >
+          <FileText size={14} />
+          {loading ? "Generating..." : "Download"}
+        </button>
+      </div>
       {error && (
         <p style={{ fontSize: "12px", color: "#f87171", marginTop: "6px" }}>{error}</p>
       )}
+      <PDFPreviewModal
+        isOpen={showPreview}
+        onClose={() => {
+          setShowPreview(false);
+          if (pdfBlobUrl) {
+            URL.revokeObjectURL(pdfBlobUrl);
+            setPdfBlobUrl(null);
+          }
+        }}
+        pdfUrl={pdfBlobUrl}
+        fileName={`RiskNote-${policyNumber || policyId.slice(0, 8)}.pdf`}
+        onDownload={() => generatePDF(false)}
+        isLoading={loading}
+      />
     </div>
   );
 }

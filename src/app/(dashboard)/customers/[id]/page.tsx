@@ -10,8 +10,9 @@ import {
   ArrowLeft, Pencil, Phone, Mail, MapPin,
   Building2, User, FileText, Calendar, CheckCircle2,
   Car, Shield, RefreshCw, X, AlertTriangle, Upload,
-  ExternalLink, Clock, ChevronRight, Plus, Eye,
+  ExternalLink, Clock, ChevronRight, Plus, Eye, Loader2,
 } from "lucide-react";
+import PDFPreviewModal from "@/components/PDFPreviewModal";
 
 interface Customer {
   id: string;
@@ -327,6 +328,9 @@ function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue,
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   async function handleUpload(file: File) {
     setUploading(true);
@@ -345,16 +349,41 @@ function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue,
     }
   }
 
+  async function handlePreview() {
+    if (!currentUrl) return;
+    setPreviewLoading(true);
+    try {
+      const response = await fetch(currentUrl, { mode: "cors" });
+      if (response.ok) {
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        setPreviewUrl(blobUrl);
+        setShowPreview(true);
+      } else {
+        setPreviewUrl(currentUrl);
+        setShowPreview(true);
+      }
+    } catch {
+      setPreviewUrl(currentUrl);
+      setShowPreview(true);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
   return (
     <div style={{ padding: "10px 12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: `1px solid ${currentUrl ? "rgba(16,185,129,0.3)" : "var(--border)"}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: currentValue ? "4px" : "0" }}>
         <p style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", margin: 0 }}>{label}</p>
         <div style={{ display: "flex", gap: "6px" }}>
           {currentUrl && (
-            <a href={currentUrl} target="_blank" rel="noopener noreferrer"
-              style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: "var(--brand)", textDecoration: "none", fontWeight: 600 }}>
-              <Eye size={11} /> View
-            </a>
+            <button
+              onClick={handlePreview}
+              disabled={previewLoading}
+              style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: "var(--brand)", background: "none", border: "none", cursor: previewLoading ? "wait" : "pointer", fontWeight: 600 }}
+            >
+              {previewLoading ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Eye size={11} />} Preview
+            </button>
           )}
           <button
             onClick={() => fileRef.current?.click()}
@@ -365,6 +394,30 @@ function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue,
           </button>
         </div>
       </div>
+
+      <PDFPreviewModal
+        isOpen={showPreview}
+        onClose={() => {
+          setShowPreview(false);
+          if (previewUrl && previewUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(previewUrl);
+          }
+          setPreviewUrl(null);
+        }}
+        pdfUrl={previewUrl}
+        fileName={label}
+        onDownload={() => {
+          if (currentUrl) {
+            const a = document.createElement("a");
+            a.href = currentUrl;
+            a.download = label;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
+        }}
+        isLoading={false}
+      />
       {currentValue && (
         <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
           <CheckCircle2 size={12} color="var(--brand)" />

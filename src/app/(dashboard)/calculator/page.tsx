@@ -7,8 +7,9 @@
 import { useState, useEffect } from "react";
 import {
   Calculator, RefreshCw, Copy, Check, ChevronDown, ChevronUp,
-  FileDown, User, Phone, Mail, Car, Loader2,
+  FileDown, User, Phone, Mail, Car, Loader2, Eye,
 } from "lucide-react";
+import PDFPreviewModal from "@/components/PDFPreviewModal";
 
 interface Insurer {
   id: string; name: string; isActive: boolean;
@@ -112,6 +113,9 @@ export default function CalculatorPage() {
   const [showClientInfo, setShowClientInfo] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState("");
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfFileName, setPdfFileName] = useState("");
 
   const [clientInfo, setClientInfo] = useState<ClientInfo>({
     name: "", phone: "", email: "", vehicleReg: "", vehicleMake: "", vehicleYear: "",
@@ -198,7 +202,7 @@ export default function CalculatorPage() {
     }
   }
 
-  async function downloadProposal() {
+  async function generateProposal(preview = false) {
     if (!result) return;
     setDownloadingPdf(true);
     setPdfError("");
@@ -238,20 +242,39 @@ export default function CalculatorPage() {
       }
 
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
       const clientRef = clientInfo.name ? clientInfo.name.replace(/\s+/g, "-") : "Quote";
-      a.download = `Myloe-Proposal-${clientRef}-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const fileName = `Myloe-Proposal-${clientRef}-${new Date().toISOString().split("T")[0]}.pdf`;
+
+      if (preview) {
+        // Create blob URL for iframe preview
+        const blobUrl = URL.createObjectURL(blob);
+        setPdfBlobUrl(blobUrl);
+        setPdfFileName(fileName);
+        setShowPdfPreview(true);
+      } else {
+        // Download directly
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     } catch {
       setPdfError("Something went wrong. Please try again.");
     } finally {
       setDownloadingPdf(false);
     }
+  }
+
+  function downloadProposal() {
+    generateProposal(false);
+  }
+
+  function previewProposal() {
+    generateProposal(true);
   }
 
   // Initialize a benefit entry with defaults from calcConfig
@@ -795,24 +818,44 @@ export default function CalculatorPage() {
 
               <div style={{ padding: "12px 18px", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "8px" }}>
                 {pdfError && <p style={{ fontSize: "12px", color: "#f87171", margin: 0 }}>{pdfError}</p>}
-                <button
-                  onClick={downloadProposal}
-                  disabled={downloadingPdf}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px",
-                    padding: "10px", backgroundColor: downloadingPdf ? "var(--brand-dim)" : "var(--bg-app)",
-                    color: "var(--brand)", border: "1px solid var(--brand)", borderRadius: "8px",
-                    fontSize: "13px", fontWeight: 700, cursor: downloadingPdf ? "not-allowed" : "pointer",
-                    transition: "background-color 0.15s",
-                  }}
-                  onMouseEnter={(e) => { if (!downloadingPdf) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--brand-dim)"; }}
-                  onMouseLeave={(e) => { if (!downloadingPdf) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-app)"; }}
-                >
-                  {downloadingPdf
-                    ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Generating PDF...</>
-                    : <><FileDown size={14} /> Download Proposal PDF</>
-                  }
-                </button>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <button
+                    onClick={previewProposal}
+                    disabled={downloadingPdf}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px",
+                      padding: "10px", backgroundColor: downloadingPdf ? "var(--brand-dim)" : "var(--bg-app)",
+                      color: "var(--brand)", border: "1px solid var(--brand)", borderRadius: "8px",
+                      fontSize: "13px", fontWeight: 700, cursor: downloadingPdf ? "not-allowed" : "pointer",
+                      transition: "background-color 0.15s",
+                    }}
+                    onMouseEnter={(e) => { if (!downloadingPdf) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--brand-dim)"; }}
+                    onMouseLeave={(e) => { if (!downloadingPdf) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-app)"; }}
+                  >
+                    {downloadingPdf
+                      ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Generating...</>
+                      : <><Eye size={14} /> Preview PDF</>
+                    }
+                  </button>
+                  <button
+                    onClick={downloadProposal}
+                    disabled={downloadingPdf}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px",
+                      padding: "10px", backgroundColor: downloadingPdf ? "var(--brand-dim)" : "var(--bg-app)",
+                      color: "var(--brand)", border: "1px solid var(--brand)", borderRadius: "8px",
+                      fontSize: "13px", fontWeight: 700, cursor: downloadingPdf ? "not-allowed" : "pointer",
+                      transition: "background-color 0.15s",
+                    }}
+                    onMouseEnter={(e) => { if (!downloadingPdf) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--brand-dim)"; }}
+                    onMouseLeave={(e) => { if (!downloadingPdf) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-app)"; }}
+                  >
+                    {downloadingPdf
+                      ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Generating...</>
+                      : <><FileDown size={14} /> Download</>
+                    }
+                  </button>
+                </div>
                 <a
                   href={`/policies/new?${selectedInsurerId ? `insurerId=${selectedInsurerId}&` : ""}sumInsured=${sumInsured}&basicRate=${basicRate}&insuranceType=${encodeURIComponent(insuranceType)}`}
                   style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "9px", backgroundColor: "var(--brand)", color: "#000", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 700, textDecoration: "none", cursor: "pointer" }}
@@ -824,6 +867,21 @@ export default function CalculatorPage() {
           )}
         </div>
       </div>
+
+      <PDFPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => {
+          setShowPdfPreview(false);
+          if (pdfBlobUrl) {
+            URL.revokeObjectURL(pdfBlobUrl);
+            setPdfBlobUrl(null);
+          }
+        }}
+        pdfUrl={pdfBlobUrl}
+        fileName={pdfFileName}
+        onDownload={downloadProposal}
+        isLoading={downloadingPdf}
+      />
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
