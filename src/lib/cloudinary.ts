@@ -99,39 +99,37 @@ export function getPublicUrl(publicId: string): string {
 }
 
 /**
- * Generate a public PDF URL with inline delivery flags so browsers
- * display it in an iframe rather than forcing a download.
+ * @deprecated Use secureUrl from uploadToCloudinary result directly.
+ * Kept for backwards-compatibility, but not recommended.
  */
 export function getPdfUrl(publicId: string): string {
+  console.warn("getPdfUrl is deprecated. Use the secureUrl from uploadToCloudinary directly.");
   return cloudinary.url(publicId, {
     secure: true,
-    resource_type: "image",   // "raw" delivers the file as-is (no image transforms)
-    type: "upload",
-    flags: "attachment:false", // ✅ ADD THIS
-    format: "pdf",
+    resource_type: "auto",
   });
 }
 
 /**
- * @deprecated Signed URLs cause 401 errors in browsers for PDFs.
- * Use getPdfUrl() instead. Kept for backwards-compatibility during migration.
+ * @deprecated Signed URLs are no longer used.
  */
 export function getPdfSignedUrl(publicId: string, _expiresInSeconds = 3600): string {
-  // Return a plain public URL instead of a signed authenticated one
-  return getPdfUrl(publicId);
+  console.warn("getPdfSignedUrl is deprecated.");
+  return cloudinary.url(publicId, {
+    secure: true,
+    resource_type: "auto",
+  });
 }
 
 /**
- * Always returns false now that all uploads are public type.
- * Kept so existing call-sites compile without changes.
+ * @deprecated Always returns false now that all uploads are public type.
  */
 export function isSignedUrl(_url: string): boolean {
   return false;
 }
 
 /**
- * No-op — signed URLs are no longer used.
- * Kept so existing call-sites compile without changes.
+ * @deprecated No-op — signed URLs are no longer used.
  */
 export function refreshSignedPdfUrl(_url: string, _expiresInSeconds = 3600): string | null {
   return null;

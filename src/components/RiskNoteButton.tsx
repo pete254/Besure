@@ -6,7 +6,6 @@
 
 import { useState } from "react";
 import { FileText, Eye } from "lucide-react";
-import PDFPreviewModal from "./PDFPreviewModal";
 
 interface RiskNoteButtonProps {
   policyId: string;
@@ -33,8 +32,8 @@ export default function RiskNoteButton({ policyId, policyNumber }: RiskNoteButto
 
       if (preview) {
         const blobUrl = URL.createObjectURL(blob);
-        setPdfBlobUrl(blobUrl);
-        setShowPreview(true);
+        window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        URL.revokeObjectURL(blobUrl);
       } else {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -115,20 +114,6 @@ export default function RiskNoteButton({ policyId, policyNumber }: RiskNoteButto
       {error && (
         <p style={{ fontSize: "12px", color: "#f87171", marginTop: "6px" }}>{error}</p>
       )}
-      <PDFPreviewModal
-        isOpen={showPreview}
-        onClose={() => {
-          setShowPreview(false);
-          if (pdfBlobUrl) {
-            URL.revokeObjectURL(pdfBlobUrl);
-            setPdfBlobUrl(null);
-          }
-        }}
-        pdfUrl={pdfBlobUrl}
-        fileName={`RiskNote-${policyNumber || policyId.slice(0, 8)}.pdf`}
-        onDownload={() => generatePDF(false)}
-        isLoading={loading}
-      />
     </div>
   );
 }

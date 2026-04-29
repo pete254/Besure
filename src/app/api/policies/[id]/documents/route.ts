@@ -8,9 +8,9 @@ import { eq } from "drizzle-orm";
 import {
   uploadToCloudinary,
   deleteFromCloudinary,
-  getPdfUrl,
   type CloudinaryFolder,
 } from "@/lib/cloudinary";
+import cloudinary from "@/lib/cloudinary";
 
 const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
   LOGBOOK: "myloe/policies/logbooks",
@@ -54,16 +54,30 @@ export async function POST(
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       const folder = DOC_FOLDER_MAP[docType] || "myloe/policies/valuations";
-      const filename = `policy_${id}_${docType}_${Date.now()}`;
+      
+      // Preserve file extension (important for PDFs and images)
+      const ext = file.name?.split(".").pop() || "bin";
+      const filename = `policy_${id}_${docType}_${Date.now()}.${ext}`;
 
       const result = await uploadToCloudinary(buffer, folder, filename);
       publicId = result.publicId;
 
+      // For PDFs, construct URL with resource_type: "raw" for proper delivery
       const isPdf =
         file.type === "application/pdf" ||
         file.name?.toLowerCase().endsWith(".pdf");
 
-      fileUrl = isPdf ? getPdfUrl(publicId) : result.secureUrl;
+      if (isPdf) {
+        // Generate raw URL for PDFs (no auth tokens, clean public URL)
+        const rawUrl = cloudinary.url(publicId, {
+          secure: true,
+          resource_type: "raw",
+          type: "upload",
+        });
+        fileUrl = rawUrl.split("?")[0];  // Remove any auth params
+      } else {
+        fileUrl = result.secureUrl;
+      }
 
       // If it's a logbook, also update the vehicle record
       if (docType === "LOGBOOK") {

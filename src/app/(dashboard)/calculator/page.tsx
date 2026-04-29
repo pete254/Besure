@@ -9,7 +9,6 @@ import {
   Calculator, RefreshCw, Copy, Check, ChevronDown, ChevronUp,
   FileDown, User, Phone, Mail, Car, Loader2, Eye,
 } from "lucide-react";
-import PDFPreviewModal from "@/components/PDFPreviewModal";
 
 interface Insurer {
   id: string; name: string; isActive: boolean;
@@ -113,9 +112,6 @@ export default function CalculatorPage() {
   const [showClientInfo, setShowClientInfo] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState("");
-  const [showPdfPreview, setShowPdfPreview] = useState(false);
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  const [pdfFileName, setPdfFileName] = useState("");
 
   const [clientInfo, setClientInfo] = useState<ClientInfo>({
     name: "", phone: "", email: "", vehicleReg: "", vehicleMake: "", vehicleYear: "",
@@ -246,11 +242,10 @@ export default function CalculatorPage() {
       const fileName = `Myloe-Proposal-${clientRef}-${new Date().toISOString().split("T")[0]}.pdf`;
 
       if (preview) {
-        // Create blob URL for iframe preview
+        // Open PDF in new tab
         const blobUrl = URL.createObjectURL(blob);
-        setPdfBlobUrl(blobUrl);
-        setPdfFileName(fileName);
-        setShowPdfPreview(true);
+        window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        URL.revokeObjectURL(blobUrl);
       } else {
         // Download directly
         const url = URL.createObjectURL(blob);
@@ -868,20 +863,6 @@ export default function CalculatorPage() {
         </div>
       </div>
 
-      <PDFPreviewModal
-        isOpen={showPdfPreview}
-        onClose={() => {
-          setShowPdfPreview(false);
-          if (pdfBlobUrl) {
-            URL.revokeObjectURL(pdfBlobUrl);
-            setPdfBlobUrl(null);
-          }
-        }}
-        pdfUrl={pdfBlobUrl}
-        fileName={pdfFileName}
-        onDownload={downloadProposal}
-        isLoading={downloadingPdf}
-      />
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>

@@ -8,9 +8,15 @@ import { eq } from "drizzle-orm";
 import {
   uploadToCloudinary,
   deleteFromCloudinary,
-  getPdfUrl,
   type CloudinaryFolder,
 } from "@/lib/cloudinary";
+import cloudinary from "@/lib/cloudinary";
+import {
+  uploadToBlob,
+  deleteFromBlob,
+  generateBlobFilename,
+  isBlobUrl,
+} from "@/lib/vercel-blob";
 
 const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
   ID: "myloe/customers/id",
@@ -50,21 +56,30 @@ export async function POST(
     let publicId: string | null = null;
 
     if (file && file.size > 0) {
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const folder = DOC_FOLDER_MAP[docType] || "myloe/customers/company-docs";
-      const filename = `${id}_${docType}_${Date.now()}`;
-
-      const result = await uploadToCloudinary(buffer, folder, filename);
-      publicId = result.publicId;
-
-      // Use getPdfUrl for PDFs (raw delivery, no image transforms)
-      // Use secureUrl directly for images — Cloudinary already returns the correct URL
       const isPdf =
         file.type === "application/pdf" ||
         file.name?.toLowerCase().endsWith(".pdf");
 
-      fileUrl = isPdf ? getPdfUrl(publicId) : result.secureUrl;
+      if (isPdf) {
+        // Use Vercel Blob for PDFs
+        const blobFilename = generateBlobFilename(id, docType, file.name);
+        const result = await uploadToBlob(file, blobFilename, file.type);
+        fileUrl = result.url; // Use direct public blob URL
+        publicId = blobFilename; // Store blob filename as publicId for reference
+      } else {
+        // Use Cloudinary for images
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const folder = DOC_FOLDER_MAP[docType] || "myloe/customers/company-docs";
+        
+        // Preserve file extension for images
+        const ext = file.name?.split(".").pop() || "bin";
+        const filename = `${id}_${docType}_${Date.now()}.${ext}`;
+
+        const result = await uploadToCloudinary(buffer, folder, filename);
+        publicId = result.publicId;
+        fileUrl = result.secureUrl;
+      }
     }
 
     // Find all existing docs for this customer to check for same type
@@ -76,10 +91,25 @@ export async function POST(
     const sameType = existingDocs.find((d) => d.docType === (docType as any));
 
     if (sameType) {
-      // Delete old Cloudinary file if we're replacing it
+      // Delete old file if we're replacing it
       if (sameType.blobKey && fileUrl) {
         try {
-          await deleteFromCloudinary(sameType.blobKey);
+          if (sameType.fileUrl && (sameType.fileUrl.includes('blob.vercel-storage.com') || sameType.fileUrl.startsWith('/api/blob/'))) {
+            // Delete from Vercel Blob
+            let filename: string;
+            if (sameType.fileUrl.startsWith('/api/blob/')) {
+              // Extract filename from proxy URL
+              filename = sameType.fileUrl.replace('/api/blob/', '');
+            } else {
+              // Extract filename from public blob URL
+              const urlParts = sameType.fileUrl.split('/');
+              filename = urlParts.slice(-3).join('/'); // customers/[id]/[type]/[filename]
+            }
+            await deleteFromBlob(filename);
+          } else {
+            // Delete from Cloudinary
+            await deleteFromCloudinary(sameType.blobKey);
+          }
         } catch {
           // Non-fatal — old file cleanup best-effort
         }

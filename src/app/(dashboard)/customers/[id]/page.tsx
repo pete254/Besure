@@ -12,7 +12,6 @@ import {
   Car, Shield, RefreshCw, X, AlertTriangle, Upload,
   ExternalLink, Clock, ChevronRight, Plus, Eye, Loader2,
 } from "lucide-react";
-import PDFPreviewModal from "@/components/PDFPreviewModal";
 
 interface Customer {
   id: string;
@@ -99,17 +98,23 @@ interface RenewModalProps {
 }
 
 function RenewModal({ policy, vehicle, insurer, onClose, onSuccess }: RenewModalProps) {
-  const newStart = (() => {
-    const d = new Date(policy.endDate);
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
-  })();
-  const newEnd = (() => {
-    const d = new Date(newStart);
-    d.setFullYear(d.getFullYear() + 1);
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().split("T")[0];
-  })();
+  // Get today's date in YYYY-MM-DD format for HTML date input
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  const newStart = `${year}-${month}-${day}`;
+  
+  // Calculate end date as one year minus one day from today
+  const endDate = new Date(today);
+  endDate.setFullYear(endDate.getFullYear() + 1);
+  endDate.setDate(endDate.getDate() - 1);
+  const endYear = endDate.getFullYear();
+  const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+  const endDay = String(endDate.getDate()).padStart(2, '0');
+  const newEnd = `${endYear}-${endMonth}-${endDay}`;
+  
+  console.log('[Renewal Debug] Today:', newStart, 'End Date:', newEnd);
 
   const [form, setForm] = useState({
     startDate: newStart,
@@ -122,6 +127,31 @@ function RenewModal({ policy, vehicle, insurer, onClose, onSuccess }: RenewModal
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Ensure form is properly initialized with today's date
+  useEffect(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    const endDate = new Date(today);
+    endDate.setFullYear(endDate.getFullYear() + 1);
+    endDate.setDate(endDate.getDate() - 1);
+    const endYear = endDate.getFullYear();
+    const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+    const endDay = String(endDate.getDate()).padStart(2, '0');
+    const endStr = `${endYear}-${endMonth}-${endDay}`;
+    
+    console.log('[Renewal useEffect] Setting dates to:', todayStr, endStr);
+    
+    setForm(prev => ({
+      ...prev,
+      startDate: todayStr,
+      endDate: endStr,
+    }));
+  }, [policy.id]); // Re-initialize when policy changes
 
   const basicPremium = form.sumInsured && form.basicRate
     ? ((parseFloat(form.sumInsured) * parseFloat(form.basicRate)) / 100).toFixed(2)
@@ -329,9 +359,6 @@ function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue,
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
 
   async function handleUpload(file: File) {
     setUploading(true);
@@ -350,41 +377,6 @@ function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue,
     }
   }
 
-  async function handlePreview() {
-    if (!currentUrl && !documentId) return;
-    setPreviewLoading(true);
-    try {
-      let url: string | null = null;
-      
-      // If we have a document ID, use the proxy route
-      if (documentId) {
-        url = `/api/pdf/proxy?type=customer&id=${documentId}`;
-        setPreviewUrl(url);
-        setShowPreview(true);
-      } else if (currentUrl) {
-        // Fallback: try to fetch directly from Cloudinary
-        try {
-          const response = await fetch(currentUrl, { mode: "cors" });
-          if (response.ok) {
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            setPreviewUrl(blobUrl);
-            setShowPreview(true);
-          } else {
-            setPreviewUrl(currentUrl);
-            setShowPreview(true);
-          }
-        } catch {
-          setPreviewUrl(currentUrl);
-          setShowPreview(true);
-        }
-      }
-    } catch (error) {
-      console.error("Preview error:", error);
-    } finally {
-      setPreviewLoading(false);
-    }
-  }
 
   return (
     <div style={{ padding: "10px 12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: `1px solid ${currentUrl ? "rgba(16,185,129,0.3)" : "var(--border)"}` }}>
@@ -393,11 +385,10 @@ function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue,
         <div style={{ display: "flex", gap: "6px" }}>
           {currentUrl && (
             <button
-              onClick={handlePreview}
-              disabled={previewLoading}
-              style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: "var(--brand)", background: "none", border: "none", cursor: previewLoading ? "wait" : "pointer", fontWeight: 600 }}
+              onClick={() => window.open(currentUrl, '_blank', 'noopener,noreferrer')}
+              style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: "var(--brand)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
             >
-              {previewLoading ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Eye size={11} />} Preview
+              <Eye size={11} /> View
             </button>
           )}
           <button
@@ -410,29 +401,6 @@ function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue,
         </div>
       </div>
 
-      <PDFPreviewModal
-        isOpen={showPreview}
-        onClose={() => {
-          setShowPreview(false);
-          if (previewUrl && previewUrl.startsWith("blob:")) {
-            URL.revokeObjectURL(previewUrl);
-          }
-          setPreviewUrl(null);
-        }}
-        pdfUrl={previewUrl}
-        fileName={label}
-        onDownload={() => {
-          if (currentUrl) {
-            const a = document.createElement("a");
-            a.href = currentUrl;
-            a.download = label;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-          }
-        }}
-        isLoading={false}
-      />
       {currentValue && (
         <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
           <CheckCircle2 size={12} color="var(--brand)" />
@@ -632,7 +600,7 @@ export default function CustomerProfilePage() {
             {customerPolicies.map((row) => {
               const days = daysUntilExpiry(row.policy.endDate);
               const isExpired = row.policy.status === "Expired" || days < 0;
-              const isExpiringSoon = !isExpired && days <= 30;
+              const isExpiringSoon = !isExpired && days <= 90;
               const expiryColor = isExpired ? "#f87171" : isExpiringSoon ? "#fbbf24" : "var(--text-muted)";
 
               return (
@@ -707,7 +675,7 @@ export default function CustomerProfilePage() {
                         </p>
                       )}
                       <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
-                        {/* Renew button — show for expired or expiring soon */}
+                        {/* Renew button - show for expired or expiring soon (90 days or less) */}
                         {(isExpired || isExpiringSoon) && (
                           <button
                             onClick={() => setRenewTarget(row)}
