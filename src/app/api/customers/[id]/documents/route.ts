@@ -5,7 +5,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { customerDocuments, customers } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { uploadToCloudinary, deleteFromCloudinary, getPdfSignedUrl, isSignedUrl, refreshSignedPdfUrl, type CloudinaryFolder } from "@/lib/cloudinary";
+import {
+  uploadToCloudinary,
+  deleteFromCloudinary,
+  getPdfUrl,
+  type CloudinaryFolder,
+} from "@/lib/cloudinary";
 
 const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
   ID: "myloe/customers/id",
@@ -15,7 +20,6 @@ const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
 };
 
 // POST /api/customers/[id]/documents
-// Body: multipart/form-data with fields: docType, docLabel (optional), file
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,7 +27,6 @@ export async function POST(
   try {
     const { id } = await params;
 
-    // Verify customer exists
     const [customer] = await db
       .select({ id: customers.id })
       .from(customers)
@@ -46,7 +49,6 @@ export async function POST(
     let fileUrl: string | null = null;
     let publicId: string | null = null;
 
-    // Upload file to Cloudinary if provided
     if (file && file.size > 0) {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
@@ -55,38 +57,31 @@ export async function POST(
 
       const result = await uploadToCloudinary(buffer, folder, filename);
       publicId = result.publicId;
-      
-      // For PDFs, use signed URL; for other files use secure URL
-      if (file.type === "application/pdf" || filename.endsWith(".pdf")) {
-        fileUrl = getPdfSignedUrl(publicId);
-      } else {
-        fileUrl = result.secureUrl;
-      }
+
+      // Use getPdfUrl for PDFs (raw delivery, no image transforms)
+      // Use secureUrl directly for images — Cloudinary already returns the correct URL
+      const isPdf =
+        file.type === "application/pdf" ||
+        file.name?.toLowerCase().endsWith(".pdf");
+
+      fileUrl = isPdf ? getPdfUrl(publicId) : result.secureUrl;
     }
 
-    // Check if a document of this type already exists for this customer
-    const [existing] = await db
+    // Find all existing docs for this customer to check for same type
+    const existingDocs = await db
       .select()
       .from(customerDocuments)
       .where(eq(customerDocuments.customerId, id));
 
-    // Upsert: if same docType exists, update it; otherwise insert
-    const existingOfType = existing
-      ? await db
-          .select()
-          .from(customerDocuments)
-          .where(eq(customerDocuments.customerId, id))
-      : [];
-
-    const sameType = existingOfType.find((d) => d.docType === (docType as any));
+    const sameType = existingDocs.find((d) => d.docType === (docType as any));
 
     if (sameType) {
-      // Delete old Cloudinary file if replacing
+      // Delete old Cloudinary file if we're replacing it
       if (sameType.blobKey && fileUrl) {
         try {
           await deleteFromCloudinary(sameType.blobKey);
         } catch {
-          // Non-fatal — old file cleanup
+          // Non-fatal — old file cleanup best-effort
         }
       }
 
@@ -143,19 +138,8 @@ export async function GET(
       .select()
       .from(customerDocuments)
       .where(eq(customerDocuments.customerId, id));
-    
-    // Refresh signed URLs if they're about to expire
-    const refreshedDocs = docs.map(doc => {
-      if (doc.fileUrl && isSignedUrl(doc.fileUrl)) {
-        const refreshedUrl = refreshSignedPdfUrl(doc.fileUrl);
-        if (refreshedUrl) {
-          return { ...doc, fileUrl: refreshedUrl };
-        }
-      }
-      return doc;
-    });
-    
-    return NextResponse.json({ documents: refreshedDocs });
+
+    return NextResponse.json({ documents: docs });
   } catch (error) {
     console.error("GET /api/customers/[id]/documents error:", error);
     return NextResponse.json(

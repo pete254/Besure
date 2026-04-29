@@ -5,7 +5,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { policyDocuments, vehicles, policies } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { uploadToCloudinary, deleteFromCloudinary, getPdfSignedUrl, isSignedUrl, refreshSignedPdfUrl, type CloudinaryFolder } from "@/lib/cloudinary";
+import {
+  uploadToCloudinary,
+  deleteFromCloudinary,
+  getPdfUrl,
+  type CloudinaryFolder,
+} from "@/lib/cloudinary";
 
 const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
   LOGBOOK: "myloe/policies/logbooks",
@@ -53,15 +58,14 @@ export async function POST(
 
       const result = await uploadToCloudinary(buffer, folder, filename);
       publicId = result.publicId;
-      
-      // For PDFs, use signed URL; for other files use secure URL
-      if (file.type === "application/pdf" || filename.endsWith(".pdf")) {
-        fileUrl = getPdfSignedUrl(publicId);
-      } else {
-        fileUrl = result.secureUrl;
-      }
 
-      // If it's a logbook, also update the vehicle record's logbook fields
+      const isPdf =
+        file.type === "application/pdf" ||
+        file.name?.toLowerCase().endsWith(".pdf");
+
+      fileUrl = isPdf ? getPdfUrl(publicId) : result.secureUrl;
+
+      // If it's a logbook, also update the vehicle record
       if (docType === "LOGBOOK") {
         await db
           .update(vehicles)
@@ -70,7 +74,6 @@ export async function POST(
       }
     }
 
-    // Find existing doc of same type for this policy
     const allDocs = await db
       .select()
       .from(policyDocuments)
@@ -137,19 +140,8 @@ export async function GET(
       .select()
       .from(policyDocuments)
       .where(eq(policyDocuments.policyId, id));
-    
-    // Refresh signed URLs if they're about to expire
-    const refreshedDocs = docs.map(doc => {
-      if (doc.fileUrl && isSignedUrl(doc.fileUrl)) {
-        const refreshedUrl = refreshSignedPdfUrl(doc.fileUrl);
-        if (refreshedUrl) {
-          return { ...doc, fileUrl: refreshedUrl };
-        }
-      }
-      return doc;
-    });
-    
-    return NextResponse.json({ documents: refreshedDocs });
+
+    return NextResponse.json({ documents: docs });
   } catch (error) {
     console.error("GET /api/policies/[id]/documents error:", error);
     return NextResponse.json(
