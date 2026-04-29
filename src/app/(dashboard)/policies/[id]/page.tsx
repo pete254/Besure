@@ -111,23 +111,32 @@ export default function PolicyDetailPage() {
   // Initialize renew dates when policy loads
   useEffect(() => {
     if (policy) {
-      const newStart = new Date(policy.endDate);
-      newStart.setDate(newStart.getDate() + 1);
-      const newEnd = new Date(newStart);
-      newEnd.setFullYear(newEnd.getFullYear() + 1);
-      newEnd.setDate(newEnd.getDate() - 1);
+      // Use today's date for renewal start date
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const newStart = `${year}-${month}-${day}`;
+      
+      // Calculate end date as one year minus one day from today
+      const endDate = new Date(today);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+      endDate.setDate(endDate.getDate() - 1);
+      const endYear = endDate.getFullYear();
+      const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+      const endDay = String(endDate.getDate()).padStart(2, '0');
+      const newEnd = `${endYear}-${endMonth}-${endDay}`;
+      
+      console.log('[Policies Page Renewal] Today:', newStart, 'End Date:', newEnd);
+      
       setRenewData({
-        startDate: newStart.toISOString().split("T")[0],
-        endDate: newEnd.toISOString().split("T")[0],
+        startDate: newStart,
+        endDate: newEnd,
         sumInsured: policy.sumInsured || "",
         basicRate: policy.basicRate || "",
         policyNumber: "",
-        paymentMode: (policy.paymentMode as any) || "Full Payment",
+        paymentMode: "Full Payment",
         notes: "",
-      });
-      setCertExpiryForm({
-        certificateExpiryDate: policy.certificateExpiryDate || "",
-        certificateExpiryReason: policy.certificateExpiryReason || "",
       });
     }
   }, [policy]);
