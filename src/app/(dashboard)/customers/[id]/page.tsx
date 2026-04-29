@@ -317,12 +317,13 @@ function RenewModal({ policy, vehicle, insurer, onClose, onSuccess }: RenewModal
 
 // ── Document Upload Widget ─────────────────────────────────────
 
-function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue, onUploaded }: {
+function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue, documentId, onUploaded }: {
   customerId: string;
   docType: string;
   label: string;
   currentUrl?: string | null;
   currentValue?: string | null;
+  documentId?: string | null;
   onUploaded: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -350,22 +351,36 @@ function DocUploadWidget({ customerId, docType, label, currentUrl, currentValue,
   }
 
   async function handlePreview() {
-    if (!currentUrl) return;
+    if (!currentUrl && !documentId) return;
     setPreviewLoading(true);
     try {
-      const response = await fetch(currentUrl, { mode: "cors" });
-      if (response.ok) {
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        setPreviewUrl(blobUrl);
+      let url: string | null = null;
+      
+      // If we have a document ID, use the proxy route
+      if (documentId) {
+        url = `/api/pdf/proxy?type=customer&id=${documentId}`;
+        setPreviewUrl(url);
         setShowPreview(true);
-      } else {
-        setPreviewUrl(currentUrl);
-        setShowPreview(true);
+      } else if (currentUrl) {
+        // Fallback: try to fetch directly from Cloudinary
+        try {
+          const response = await fetch(currentUrl, { mode: "cors" });
+          if (response.ok) {
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            setPreviewUrl(blobUrl);
+            setShowPreview(true);
+          } else {
+            setPreviewUrl(currentUrl);
+            setShowPreview(true);
+          }
+        } catch {
+          setPreviewUrl(currentUrl);
+          setShowPreview(true);
+        }
       }
-    } catch {
-      setPreviewUrl(currentUrl);
-      setShowPreview(true);
+    } catch (error) {
+      console.error("Preview error:", error);
     } finally {
       setPreviewLoading(false);
     }
@@ -783,6 +798,7 @@ export default function CustomerProfilePage() {
                   label="National ID"
                   currentUrl={getDoc("ID")?.fileUrl}
                   currentValue={idDisplay}
+                  documentId={getDoc("ID")?.id}
                   onUploaded={fetchAll}
                 />
                 <DocUploadWidget
@@ -791,6 +807,7 @@ export default function CustomerProfilePage() {
                   label="KRA PIN"
                   currentUrl={getDoc("KRA")?.fileUrl}
                   currentValue={kraPinDisplay}
+                  documentId={getDoc("KRA")?.id}
                   onUploaded={fetchAll}
                 />
                 <DocUploadWidget
@@ -799,6 +816,7 @@ export default function CustomerProfilePage() {
                   label="Passport"
                   currentUrl={getDoc("PASSPORT")?.fileUrl}
                   currentValue={null}
+                  documentId={getDoc("PASSPORT")?.id}
                   onUploaded={fetchAll}
                 />
               </>
@@ -810,6 +828,7 @@ export default function CustomerProfilePage() {
                   label="Certificate of Incorporation"
                   currentUrl={getDoc("OTHER")?.fileUrl}
                   currentValue={customer.certOfIncorporationValue}
+                  documentId={getDoc("OTHER")?.id}
                   onUploaded={fetchAll}
                 />
                 <div style={{ padding: "10px 12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)" }}>

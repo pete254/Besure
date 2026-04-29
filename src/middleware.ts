@@ -9,9 +9,10 @@ export default auth((req) => {
   const isAuthPage = req.nextUrl.pathname.startsWith("/login");
   const isApiAuth = req.nextUrl.pathname.startsWith("/api/auth");
   const isCron = req.nextUrl.pathname.startsWith("/api/cron");
+  const isMigrate = req.nextUrl.pathname.startsWith("/api/migrate");
 
-  // Allow auth routes and cron through
-  if (isApiAuth || isCron) return NextResponse.next();
+  // Allow auth routes, cron, and migration endpoints through
+  if (isApiAuth || isCron || isMigrate) return NextResponse.next();
 
   // Redirect unauthenticated users to login
   if (!isLoggedIn && !isAuthPage) {
