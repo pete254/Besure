@@ -105,8 +105,10 @@ export function getPublicUrl(publicId: string): string {
 export function getPdfUrl(publicId: string): string {
   return cloudinary.url(publicId, {
     secure: true,
-    resource_type: "raw",   // "raw" delivers the file as-is (no image transforms)
+    resource_type: "image",   // "raw" delivers the file as-is (no image transforms)
     type: "upload",
+    flags: "attachment:false", // ✅ ADD THIS
+    format: "pdf",
   });
 }
 
