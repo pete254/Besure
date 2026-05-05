@@ -58,7 +58,7 @@ export const policyStatusEnum = pgEnum("policy_status", [
 ]);
 
 export const policyDocTypeEnum = pgEnum("policy_doc_type", [
-  "LOGBOOK", "VALUATION", "PROPOSAL", "PREVIOUS_POLICY", "OTHER",
+  "LOGBOOK", "VALUATION", "PROPOSAL", "QUOTATION", "PREVIOUS_POLICY", "OTHER",
 ]);
 
 export const policyDocStatusEnum = pgEnum("policy_doc_status", [

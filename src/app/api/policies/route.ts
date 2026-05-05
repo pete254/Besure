@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { policies, customers, vehicles, insurers, policyBenefits, payments } from "@/drizzle/schema";
+import { policies, customers, vehicles, insurers, policyBenefits, payments, policyDocuments } from "@/drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
 
@@ -59,6 +59,12 @@ const createPolicySchema = z.object({
   ipfProvider: z.string().optional().nullable(),
   ipfLoanReference: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  documents: z.array(z.object({
+    docType: z.string(),
+    fileUrl: z.string(),
+    blobKey: z.string(),
+    docLabel: z.string(),
+  })).default([]),
 });
 
 // Which insurance types count as "motor"
@@ -213,6 +219,20 @@ export async function POST(req: NextRequest) {
         { policyId: newPolicy.id, installmentNumber: 2, totalInstallments: 3, amountDue: third2, dueDate: date2.toISOString().split("T")[0], status: "pending" },
         { policyId: newPolicy.id, installmentNumber: 3, totalInstallments: 3, amountDue: third3, dueDate: date3.toISOString().split("T")[0], status: "pending" },
       ]);
+    }
+
+    // Create policy documents
+    if (data.documents.length > 0) {
+      await db.insert(policyDocuments).values(
+        data.documents.map((doc) => ({
+          policyId: newPolicy.id,
+          docType: doc.docType as any,
+          docLabel: doc.docLabel,
+          status: "Received" as any,
+          fileUrl: doc.fileUrl,
+          blobKey: doc.blobKey,
+        }))
+      );
     }
 
     return NextResponse.json({ policy: newPolicy }, { status: 201 });

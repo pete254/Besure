@@ -3,12 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import {
-  policies,
-  vehicles,
-  policyBenefits,
-  payments,
-} from "@/drizzle/schema";
+import { policies, vehicles, policyBenefits, payments, policyDocuments } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -37,6 +32,13 @@ const renewSchema = z.object({
     )
     .optional(),
   totalBenefits: z.string().default("0"),
+  documents: z.array(z.object({
+    id: z.string(),
+    docType: z.string(),
+    fileUrl: z.string(),
+    blobKey: z.string(),
+    docLabel: z.string(),
+  })).default([]),
 });
 
 // POST /api/policies/[id]/renew
@@ -138,6 +140,20 @@ export async function POST(
           benefitOptionId: (b as any).benefitOptionId || null,
           benefitName: b.benefitName,
           amountKes: b.amountKes,
+        }))
+      );
+    }
+
+    // Copy selected documents to renewed policy
+    if (data.documents && data.documents.length > 0) {
+      await db.insert(policyDocuments).values(
+        data.documents.map((doc) => ({
+          policyId: renewedPolicy.id,
+          docType: doc.docType as any,
+          docLabel: doc.docLabel,
+          status: "Received" as any,
+          fileUrl: doc.fileUrl,
+          blobKey: doc.blobKey,
         }))
       );
     }

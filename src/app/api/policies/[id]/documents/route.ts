@@ -1,24 +1,18 @@
 // src/app/api/policies/[id]/documents/route.ts
-// Upload policy documents (logbook, valuation) to Cloudinary
+// Upload policy documents using Vercel Blob storage
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { policyDocuments, vehicles, policies } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-  type CloudinaryFolder,
-} from "@/lib/cloudinary";
-import cloudinary from "@/lib/cloudinary";
+import { z } from "zod";
 
-const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
-  LOGBOOK: "myloe/policies/logbooks",
-  VALUATION: "myloe/policies/valuations",
-  PROPOSAL: "myloe/policies/valuations",
-  PREVIOUS_POLICY: "myloe/policies/valuations",
-  OTHER: "myloe/policies/valuations",
-};
+const createDocumentSchema = z.object({
+  docType: z.enum(["LOGBOOK", "VALUATION", "PROPOSAL", "QUOTATION", "PREVIOUS_POLICY", "OTHER"]),
+  fileUrl: z.string().url(),
+  blobKey: z.string(),
+  docLabel: z.string(),
+});
 
 // POST /api/policies/[id]/documents
 export async function POST(
@@ -37,107 +31,75 @@ export async function POST(
       return NextResponse.json({ error: "Policy not found" }, { status: 404 });
     }
 
-    const formData = await req.formData();
-    const docType = formData.get("docType") as string;
-    const docLabel = formData.get("docLabel") as string | null;
-    const status = (formData.get("status") as string) || "Received";
-    const file = formData.get("file") as File | null;
+    const body = await req.json();
+    const parsed = createDocumentSchema.safeParse(body);
 
-    if (!docType) {
-      return NextResponse.json({ error: "docType is required" }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", issues: parsed.error.issues },
+        { status: 400 }
+      );
     }
 
-    let fileUrl: string | null = null;
-    let publicId: string | null = null;
+    const data = parsed.data;
 
-    if (file && file.size > 0) {
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const folder = DOC_FOLDER_MAP[docType] || "myloe/policies/valuations";
-      
-      // Preserve file extension (important for PDFs and images)
-      const ext = file.name?.split(".").pop() || "bin";
-      const filename = `policy_${id}_${docType}_${Date.now()}.${ext}`;
+    // Create document record with pre-uploaded file info
+    const [document] = await db.insert(policyDocuments).values({
+      policyId: id,
+      docType: data.docType,
+      docLabel: data.docLabel,
+      status: "Received",
+      fileUrl: data.fileUrl,
+      blobKey: data.blobKey,
+    }).returning();
 
-      const result = await uploadToCloudinary(buffer, folder, filename);
-      publicId = result.publicId;
-
-      // For PDFs, construct URL with resource_type: "raw" for proper delivery
-      const isPdf =
-        file.type === "application/pdf" ||
-        file.name?.toLowerCase().endsWith(".pdf");
-
-      if (isPdf) {
-        // Generate raw URL for PDFs (no auth tokens, clean public URL)
-        const rawUrl = cloudinary.url(publicId, {
-          secure: true,
-          resource_type: "raw",
-          type: "upload",
-        });
-        fileUrl = rawUrl.split("?")[0];  // Remove any auth params
-      } else {
-        fileUrl = result.secureUrl;
-      }
-
-      // If it's a logbook, also update the vehicle record
-      if (docType === "LOGBOOK") {
-        await db
-          .update(vehicles)
-          .set({ logbookUrl: fileUrl, logbookBlobKey: publicId, updatedAt: new Date() })
-          .where(eq(vehicles.policyId, id));
-      }
-    }
-
-    const allDocs = await db
-      .select()
-      .from(policyDocuments)
-      .where(eq(policyDocuments.policyId, id));
-
-    const sameType = allDocs.find((d) => d.docType === (docType as any));
-
-    if (sameType) {
-      if (sameType.blobKey && fileUrl) {
-        try {
-          await deleteFromCloudinary(sameType.blobKey);
-        } catch {
-          // Non-fatal
-        }
-      }
-
-      const [updated] = await db
-        .update(policyDocuments)
-        .set({
-          fileUrl: fileUrl || sameType.fileUrl,
-          blobKey: publicId || sameType.blobKey,
-          status: status as any,
-          docLabel: docLabel || sameType.docLabel,
-          receivedDate: new Date().toISOString().split("T")[0],
-          updatedAt: new Date(),
-        })
-        .where(eq(policyDocuments.id, sameType.id))
-        .returning();
-
-      return NextResponse.json({ document: updated });
-    }
-
-    const [newDoc] = await db
-      .insert(policyDocuments)
-      .values({
-        policyId: id,
-        docType: docType as any,
-        docLabel,
-        status: status as any,
-        fileUrl,
-        blobKey: publicId,
-        receivedDate: fileUrl ? new Date().toISOString().split("T")[0] : null,
-      })
-      .returning();
-
-    return NextResponse.json({ document: newDoc }, { status: 201 });
+    return NextResponse.json({ document }, { status: 201 });
   } catch (error) {
     console.error("POST /api/policies/[id]/documents error:", error);
     return NextResponse.json(
       { error: "Failed to upload document" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/policies/[id]/documents/[docId]
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const url = new URL(req.url);
+    const docId = url.pathname.split('/').pop();
+    
+    if (!docId) {
+      return NextResponse.json({ error: "Document ID is required" }, { status: 400 });
+    }
+
+    // Find the document
+    const [document] = await db
+      .select()
+      .from(policyDocuments)
+      .where(eq(policyDocuments.id, docId));
+
+    if (!document) {
+      return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    }
+
+    // Verify the document belongs to the policy
+    if (document.policyId !== id) {
+      return NextResponse.json({ error: "Document does not belong to this policy" }, { status: 403 });
+    }
+
+    // Delete the document record
+    await db.delete(policyDocuments).where(eq(policyDocuments.id, docId));
+
+    return NextResponse.json({ message: "Document deleted successfully" });
+  } catch (error) {
+    console.error("DELETE /api/policies/[id]/documents error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete document" },
       { status: 500 }
     );
   }

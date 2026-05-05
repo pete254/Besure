@@ -5,8 +5,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Car, CreditCard, FileText, Calendar, User, Building2, CheckCircle2, Clock, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, Car, CreditCard, FileText, Calendar, User, Building2, CheckCircle2, Clock, RefreshCw, X, Upload, Eye } from "lucide-react";
 import RiskNoteButton from "@/components/RiskNoteButton";
+import { uploadToBlob } from "@/lib/vercel-blob";
 
 interface Policy {
   id: string;
@@ -86,9 +87,13 @@ export default function PolicyDetailPage() {
   const [certExpiryForm, setCertExpiryForm] = useState({ certificateExpiryDate: "", certificateExpiryReason: "" });
   const [certExpirySaving, setCertExpirySaving] = useState(false);
   const [certExpiryError, setCertExpiryError] = useState("");
-  const [renewData, setRenewData] = useState({ startDate: "", endDate: "", sumInsured: "", basicRate: "", policyNumber: "", paymentMode: "Full Payment", notes: "" });
+  const [renewData, setRenewData] = useState({ startDate: "", endDate: "", sumInsured: "", basicRate: "", policyNumber: "", paymentMode: "Full Payment", notes: "", benefits: [] as Benefit[], documents: [] as any[] });
   const [renewSaving, setRenewSaving] = useState(false);
   const [renewError, setRenewError] = useState("");
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [showDocumentUpload, setShowDocumentUpload] = useState(false);
+  const [newDocument, setNewDocument] = useState({ docType: "", file: null as File | null });
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -101,6 +106,7 @@ export default function PolicyDetailPage() {
         setBenefits(d.benefits || []);
         setPaymentList(d.payments || []);
         setInsurer(d.insurer || null);
+        setDocuments(d.documents || []);
       } finally {
         setLoading(false);
       }
@@ -137,6 +143,8 @@ export default function PolicyDetailPage() {
         policyNumber: "",
         paymentMode: "Full Payment",
         notes: "",
+        benefits: benefits || [],
+        documents: documents || [],
       });
     }
   }, [policy]);
@@ -212,6 +220,69 @@ export default function PolicyDetailPage() {
       setCertExpiryError("Something went wrong");
     } finally {
       setCertExpirySaving(false);
+    }
+  }
+
+  async function handleDocumentUpload() {
+    if (!newDocument.docType || !newDocument.file) return;
+
+    setUploadingDocument(true);
+    try {
+      // Upload to Vercel Blob storage
+      const filename = `policies/${newDocument.docType.toLowerCase()}_${Date.now()}_${newDocument.file.name}`;
+      const result = await uploadToBlob(newDocument.file, filename, newDocument.file.type);
+
+      // Create document record
+      const res = await fetch(`/api/policies/${id}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          docType: newDocument.docType,
+          fileUrl: result.url,
+          blobKey: filename,
+          docLabel: newDocument.file.name,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to upload document");
+        return;
+      }
+
+      // Add to documents list
+      setDocuments(prev => [...prev, data.document]);
+      
+      // Reset form
+      setNewDocument({ docType: "", file: null });
+      setShowDocumentUpload(false);
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Failed to upload document. Please try again.');
+    } finally {
+      setUploadingDocument(false);
+    }
+  }
+
+  async function handleDeleteDocument(docId: string) {
+    if (!confirm('Are you sure you want to delete this document?')) return;
+
+    try {
+      const res = await fetch(`/api/policies/${id}/documents/${docId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to delete document");
+        return;
+      }
+
+      // Remove from documents list
+      setDocuments(prev => prev.filter(doc => doc.id !== docId));
+    } catch (error) {
+      console.error('Delete failed:', error);
+      alert('Failed to delete document. Please try again.');
     }
   }
 
@@ -439,6 +510,113 @@ export default function PolicyDetailPage() {
         </div>
       </div>
 
+      {/* Policy Documents */}
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+          <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+            <FileText size={14} style={{ display: "inline", marginRight: "6px", verticalAlign: "middle" }} />
+            Policy Documents
+          </p>
+          <button
+            onClick={() => setShowDocumentUpload(!showDocumentUpload)}
+            style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid var(--brand)", borderRadius: "6px", backgroundColor: "var(--brand-dim)", color: "var(--brand)", cursor: "pointer" }}
+          >
+            <Upload size={12} style={{ display: "inline", marginRight: "4px", verticalAlign: "middle" }} />
+            Add Document
+          </button>
+        </div>
+
+        {/* Document Upload Form */}
+        {showDocumentUpload && (
+          <div style={{ marginBottom: "16px", padding: "12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <select
+                value={newDocument.docType}
+                onChange={(e) => setNewDocument(prev => ({ ...prev, docType: e.target.value }))}
+                style={{ padding: "8px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px" }}
+              >
+                <option value="">Select Document Type</option>
+                <option value="VALUATION">Valuation</option>
+                <option value="PROPOSAL">Proposal Form</option>
+                <option value="LOGBOOK">Logbook</option>
+                <option value="QUOTATION">Quotation</option>
+                <option value="PREVIOUS_POLICY">Previous Policy</option>
+                <option value="OTHER">Other</option>
+              </select>
+              <div>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) setNewDocument(prev => ({ ...prev, file }));
+                  }}
+                  style={{ width: "100%", padding: "8px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px" }}
+                />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowDocumentUpload(false)}
+                style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "6px", backgroundColor: "transparent", color: "var(--text-secondary)", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDocumentUpload}
+                disabled={!newDocument.docType || !newDocument.file || uploadingDocument}
+                style={{ padding: "6px 12px", fontSize: "12px", border: "none", borderRadius: "6px", backgroundColor: uploadingDocument ? "var(--brand-dim)" : "var(--brand)", color: "#000", cursor: uploadingDocument ? "not-allowed" : "pointer" }}
+              >
+                {uploadingDocument ? "Uploading..." : "Upload"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Documents List */}
+        {documents.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {documents.map((doc) => (
+              <div key={doc.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "2px" }}>
+                    {doc.docType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                    {doc.docLabel}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "var(--brand)", marginTop: "2px" }}>
+                    Status: {doc.status}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <button
+                    onClick={() => window.open(doc.fileUrl, '_blank')}
+                    style={{ padding: "4px 8px", fontSize: "11px", border: "1px solid var(--brand)", borderRadius: "4px", backgroundColor: "var(--brand-dim)", color: "var(--brand)", cursor: "pointer" }}
+                  >
+                    <Eye size={10} style={{ marginRight: "4px" }} />
+                    View
+                  </button>
+                  <button
+                    onClick={() => handleDeleteDocument(doc.id)}
+                    style={{ padding: "4px 8px", fontSize: "11px", border: "1px solid #ef4444", borderRadius: "4px", backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444", cursor: "pointer" }}
+                  >
+                    <X size={10} style={{ marginRight: "4px" }} />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)" }}>
+            <FileText size={32} style={{ display: "block", margin: "0 auto 8px", opacity: 0.5 }} />
+            <p style={{ fontSize: "13px", margin: 0 }}>No documents uploaded yet</p>
+            <p style={{ fontSize: "11px", margin: "4px 0 0", opacity: 0.8 }}>Click "Add Document" to upload policy documents</p>
+          </div>
+        )}
+      </div>
+
       {/* Payments */}
       <div className="card">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
@@ -533,6 +711,109 @@ export default function PolicyDetailPage() {
               <div>
                 <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Notes (optional)</label>
                 <input value={renewData.notes} onChange={(e) => setRenewData(p => ({ ...p, notes: e.target.value }))} placeholder="Any renewal notes..." style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
+              </div>
+
+              {/* Benefits Selection */}
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>
+                  Additional Benefits
+                </label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "150px", overflowY: "auto" }}>
+                  {benefits.length > 0 ? (
+                    benefits.map((benefit) => (
+                      <div key={benefit.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px", backgroundColor: "var(--bg-app)", borderRadius: "6px", border: "1px solid var(--border)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <input
+                            type="checkbox"
+                            checked={renewData.benefits.some((b: any) => b.benefitOptionId === benefit.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setRenewData(prev => ({
+                                  ...prev,
+                                  benefits: [...prev.benefits, benefit as any]
+                                }));
+                              } else {
+                                setRenewData(prev => ({
+                                  ...prev,
+                                  benefits: prev.benefits.filter((b: any) => b.benefitOptionId !== benefit.id)
+                                }));
+                              }
+                            }}
+                            style={{ cursor: "pointer" }}
+                          />
+                          <div>
+                            <div style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)" }}>
+                              {benefit.benefitName}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "var(--brand)" }}>
+                              {formatKES(benefit.amountKes)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ textAlign: "center", padding: "16px", color: "var(--text-muted)", fontSize: "12px" }}>
+                      No additional benefits available
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Document Handling */}
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>
+                  Policy Documents
+                </label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {documents.length > 0 ? (
+                    documents.map((doc) => (
+                      <div key={doc.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px", backgroundColor: "var(--bg-app)", borderRadius: "6px", border: "1px solid var(--border)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <input
+                            type="checkbox"
+                            checked={renewData.documents.some((d: any) => d.id === doc.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setRenewData(prev => ({
+                                  ...prev,
+                                  documents: [...prev.documents, doc as any]
+                                }));
+                              } else {
+                                setRenewData(prev => ({
+                                  ...prev,
+                                  documents: prev.documents.filter((d: any) => d.id !== doc.id)
+                                }));
+                              }
+                            }}
+                            style={{ cursor: "pointer" }}
+                          />
+                          <div>
+                            <div style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)" }}>
+                              {doc.docType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                            </div>
+                            <div style={{ fontSize: "10px", color: "var(--text-muted)" }}>
+                              {doc.docLabel}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => window.open(doc.fileUrl, '_blank')}
+                          style={{ padding: "2px 6px", fontSize: "10px", border: "1px solid var(--brand)", borderRadius: "4px", backgroundColor: "var(--brand-dim)", color: "var(--brand)", cursor: "pointer" }}
+                        >
+                          <Eye size={8} />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ textAlign: "center", padding: "16px", color: "var(--text-muted)", fontSize: "12px" }}>
+                      No documents available
+                    </div>
+                  )}
+                </div>
+                <p style={{ fontSize: "10px", color: "var(--text-muted)", margin: "8px 0 0", fontStyle: "italic" }}>
+                  Select documents to carry over to the renewed policy
+                </p>
               </div>
             </div>
 

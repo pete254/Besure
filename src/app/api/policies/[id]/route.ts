@@ -24,7 +24,7 @@ export async function GET(
     }
 
     // Fetch related data in parallel
-    const [customer, vehicle, benefits, paymentList, insurer] = await Promise.all([
+    const [customer, vehicle, benefits, paymentList, insurer, documents] = await Promise.all([
       db.select().from(customers).where(eq(customers.id, policy.customerId)).then(r => r[0]),
       db.select().from(vehicles).where(eq(vehicles.policyId, id)).then(r => r[0]),
       db.select().from(policyBenefits).where(eq(policyBenefits.policyId, id)),
@@ -32,9 +32,10 @@ export async function GET(
       policy.insurerId
         ? db.select().from(insurers).where(eq(insurers.id, policy.insurerId)).then(r => r[0])
         : Promise.resolve(null),
+      db.select().from(policyDocuments).where(eq(policyDocuments.policyId, id)),
     ]);
 
-    return NextResponse.json({ policy, customer, vehicle, benefits, payments: paymentList, insurer });
+    return NextResponse.json({ policy, customer, vehicle, benefits, payments: paymentList, insurer, documents });
   } catch (error) {
     console.error("GET /api/policies/[id] error:", error);
     return NextResponse.json({ error: "Failed to fetch policy" }, { status: 500 });

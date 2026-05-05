@@ -6,10 +6,11 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Upload, X, Eye } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
 import DraftBanner from "@/components/DraftBanner";
 import { useDraft } from "@/hooks/useDraft";
+import { uploadToBlob } from "@/lib/vercel-blob";
 import {
   validateRequired,
   validateYear,
@@ -47,6 +48,13 @@ interface BenefitEntry {
   lossOfUseDays?: string;
 }
 
+interface PolicyDocument {
+  docType: string;
+  fileUrl: string;
+  blobKey: string;
+  docLabel: string;
+}
+
 interface PolicyData {
   insuranceType: string;
   customerId: string; customerName: string;
@@ -62,6 +70,7 @@ interface PolicyData {
   stampDuty: string; phcf: string;
   benefits: BenefitEntry[]; totalBenefits: string;
   grandTotal: string; paymentMode: string; ipfProvider: string; ipfLoanReference: string; notes: string;
+  documents: PolicyDocument[];
 }
 
 // ── Insurance type definitions ──────────────────────────────
@@ -123,6 +132,7 @@ const emptyPolicy: PolicyData = {
   basicRate: "", basicPremium: "", iraLevy: "", stampDuty: "40", phcf: "0",
   benefits: [], totalBenefits: "0",
   grandTotal: "", paymentMode: "Full Payment", ipfProvider: "", ipfLoanReference: "", notes: "",
+  documents: [],
 };
 
 export default function NewPolicyPage() {
@@ -371,7 +381,7 @@ export default function NewPolicyPage() {
       const rateErr = validateRate(data.basicRate);
       if (rateErr) errors.basicRate = rateErr;
     }
-    if (currentStep === 7) {
+    if (currentStep === 8) {
       if (!data.paymentMode) errors.paymentMode = "Please select a payment mode";
       if (data.paymentMode === "IPF" && !data.ipfProvider) errors.ipfProvider = "IPF provider name is required";
     }
@@ -999,8 +1009,110 @@ export default function NewPolicyPage() {
         </div>
       )}
 
-      {/* ── STEP 7: Summary & Payment ── */}
+      {/* ── STEP 7: Documents Upload ── */}
       {step === 7 && (
+        <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
+          <div style={{ marginBottom: "16px" }}>
+            <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#ffffff", margin: "0 0 8px" }}>
+              Policy Documents (Optional)
+            </h3>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "0 0 16px" }}>
+              Upload supporting documents for this policy. These are optional and can be updated later.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {["VALUATION", "PROPOSAL", "LOGBOOK", "QUOTATION"].map((docType) => {
+              const existingDoc = data.documents.find(d => d.docType === docType);
+              return (
+                <div key={docType} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                  <div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", marginBottom: "2px" }}>
+                      {docType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </div>
+                    {existingDoc && (
+                      <div style={{ fontSize: "11px", color: "var(--brand)" }}>
+                        Uploaded: {existingDoc.docLabel}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    {existingDoc ? (
+                      <>
+                        <button
+                          onClick={() => window.open(existingDoc.fileUrl, '_blank')}
+                          style={{ padding: "4px 8px", fontSize: "11px", border: "1px solid var(--brand)", borderRadius: "4px", backgroundColor: "var(--brand-dim)", color: "var(--brand)", cursor: "pointer" }}
+                        >
+                          <Eye size={10} style={{ marginRight: "4px" }} />
+                          View
+                        </button>
+                        <button
+                          onClick={() => {
+                            setData(prev => ({
+                              ...prev,
+                              documents: prev.documents.filter(d => d.docType !== docType)
+                            }));
+                          }}
+                          style={{ padding: "4px 8px", fontSize: "11px", border: "1px solid #ef4444", borderRadius: "4px", backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444", cursor: "pointer" }}
+                        >
+                          Remove
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = '.pdf,.jpg,.jpeg,.png';
+                          input.onchange = async (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) {
+                              try {
+                                // Upload to Vercel Blob storage
+                                const filename = `policies/${docType.toLowerCase()}_${Date.now()}_${file.name}`;
+                                const result = await uploadToBlob(file, filename, file.type);
+                                
+                                const newDoc: PolicyDocument = {
+                                  docType,
+                                  fileUrl: result.url,
+                                  blobKey: filename,
+                                  docLabel: file.name
+                                };
+                                
+                                setData(prev => ({
+                                  ...prev,
+                                  documents: [...prev.documents, newDoc]
+                                }));
+                              } catch (error) {
+                                console.error('Upload failed:', error);
+                                alert('Failed to upload document. Please try again.');
+                              }
+                            }
+                          };
+                          input.click();
+                        }}
+                        style={{ padding: "4px 8px", fontSize: "11px", border: "1px solid var(--brand)", borderRadius: "4px", backgroundColor: "var(--brand-dim)", color: "var(--brand)", cursor: "pointer" }}
+                      >
+                        <Upload size={10} style={{ marginRight: "4px" }} />
+                        Upload
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ marginTop: "16px", padding: "12px", backgroundColor: "rgba(16,185,129,0.1)", borderRadius: "8px", border: "1px solid rgba(16,185,129,0.2)" }}>
+            <p style={{ fontSize: "11px", color: "var(--brand)", margin: 0 }}>
+              💡 Documents are optional and can be uploaded later from the policy details page.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 8: Summary & Payment ── */}
+      {step === 8 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
@@ -1099,7 +1211,7 @@ export default function NewPolicyPage() {
         <button className="btn-secondary" onClick={() => step > 1 ? setStep(s => s - 1) : router.push("/policies")}>
           <ArrowLeft size={14} /> {step === 1 ? "Cancel" : "Back"}
         </button>
-        {step < 7 ? (
+        {step < 8 ? (
           <button className="btn-primary" onClick={() => {
             setFieldErrors({});
             const errors = validateStep(step);
