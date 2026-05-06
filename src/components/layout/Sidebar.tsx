@@ -12,6 +12,7 @@ import {
   Calculator,
   BarChart3,
   Settings,
+  Activity,
 } from "lucide-react";
 
 const navigation = [
@@ -27,6 +28,7 @@ const navigation = [
       { name: "Customers", href: "/customers", icon: Users },
       { name: "Policies",  href: "/policies",  icon: FileText },
       { name: "Claims",    href: "/claims",    icon: AlertTriangle },
+      { name: "Application History", href: "/operations", icon: Activity },
     ],
   },
   {
