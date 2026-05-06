@@ -5,7 +5,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  FileText, AlertTriangle, Activity, ChevronRight,
+  FileText, AlertTriangle, Activity, ChevronRight, AlertCircle,
 } from "lucide-react";
 
 interface ApplicationHistoryData {
