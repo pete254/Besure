@@ -246,11 +246,7 @@ export default function PolicyDetailPage() {
   const [policyDocuments, setPolicyDocuments] = useState<PolicyDocument[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [showRenewModal, setShowRenewModal] = useState(false);
-  const [renewData, setRenewData] = useState({ startDate: "", endDate: "", sumInsured: "", basicRate: "", policyNumber: "", paymentMode: "Full Payment", notes: "" });
-  const [renewSaving, setRenewSaving] = useState(false);
-  const [renewError, setRenewError] = useState("");
-
+  
   const [showCertExpiry, setShowCertExpiry] = useState(false);
   const [certExpiryForm, setCertExpiryForm] = useState({ certificateExpiryDate: "", certificateExpiryReason: "" });
   const [certExpirySaving, setCertExpirySaving] = useState(false);
@@ -288,49 +284,8 @@ export default function PolicyDetailPage() {
     }
   }, [id]);
 
-  useEffect(() => {
-    if (policy) {
-      const today = new Date();
-      const y = today.getFullYear(), m = String(today.getMonth() + 1).padStart(2, "0"), d = String(today.getDate()).padStart(2, "0");
-      const todayStr = `${y}-${m}-${d}`;
-      const end = new Date(today);
-      end.setFullYear(end.getFullYear() + 1);
-      end.setDate(end.getDate() - 1);
-      const ey = end.getFullYear(), em = String(end.getMonth() + 1).padStart(2, "0"), ed = String(end.getDate()).padStart(2, "0");
-      const endStr = `${ey}-${em}-${ed}`;
-      setRenewData({
-        startDate: todayStr, endDate: endStr,
-        sumInsured: policy.sumInsured || "",
-        basicRate: policy.basicRate || "",
-        policyNumber: "", paymentMode: "Full Payment", notes: "",
-      });
-    }
-  }, [policy]);
-
-  async function handleRenew() {
-    setRenewError("");
-    setRenewSaving(true);
-    try {
-      const basicPremium = renewData.sumInsured && renewData.basicRate
-        ? ((parseFloat(renewData.sumInsured) * parseFloat(renewData.basicRate)) / 100).toFixed(2)
-        : "0.00";
-      const iraLevy = (parseFloat(basicPremium) * 0.0045).toFixed(2);
-      const grandTotal = (parseFloat(basicPremium) + parseFloat(iraLevy) + 40 + 100).toFixed(2);
-      const res = await fetch(`/api/policies/${id}/renew`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...renewData, basicPremium, iraLevy, trainingLevy: "0", stampDuty: "40", phcf: "100", grandTotal, totalBenefits: "0" }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setRenewError(data.error || "Failed to renew"); return; }
-      router.push(`/policies/${data.policy.id}`);
-    } catch {
-      setRenewError("Something went wrong");
-    } finally {
-      setRenewSaving(false);
-    }
-  }
-
+  
+  
   async function handleUpdateCertExpiry() {
     setCertExpiryError("");
     if (!certExpiryForm.certificateExpiryDate) { setCertExpiryError("Expiry date is required"); return; }
@@ -407,12 +362,12 @@ export default function PolicyDetailPage() {
           </p>
           <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
             <RiskNoteButton policyId={policy.id} policyNumber={policy.policyNumber} />
-            <button
-              onClick={() => setShowRenewModal(true)}
-              style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--brand)", backgroundColor: "var(--brand-dim)", color: "var(--brand)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+            <Link
+              href={`/policies/new?renewFrom=${policy.id}`}
+              style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--brand)", backgroundColor: "var(--brand-dim)", color: "var(--brand)", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}
             >
               <RefreshCw size={12} /> Renew
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -624,63 +579,7 @@ export default function PolicyDetailPage() {
         )}
       </div>
 
-      {/* ── RENEW MODAL ── */}
-      {showRenewModal && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: "16px" }}
-          onClick={() => setShowRenewModal(false)}>
-          <div style={{ backgroundColor: "var(--bg-card)", borderRadius: "12px", border: "1px solid var(--border)", padding: "24px", maxWidth: "420px", width: "100%", maxHeight: "90vh", overflowY: "auto" }}
-            onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#ffffff", margin: 0 }}>Renew Policy</h3>
-              <button onClick={() => setShowRenewModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}><X size={18} /></button>
-            </div>
-            {renewError && <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "6px", color: "#fca5a5", fontSize: "12px", marginBottom: "12px" }}>{renewError}</div>}
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {[
-                { key: "startDate", label: "Start Date", type: "date" },
-                { key: "endDate", label: "End Date", type: "date" },
-                { key: "sumInsured", label: "Sum Insured (KES)", type: "number", placeholder: "e.g. 1500000" },
-                { key: "basicRate", label: "Basic Rate (%)", type: "number", placeholder: "e.g. 4.00" },
-                { key: "policyNumber", label: "Policy Number", type: "text", placeholder: "Add later if pending" },
-              ].map(({ key, label, type, placeholder }) => (
-                <div key={key}>
-                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>{label}</label>
-                  <input type={type} value={(renewData as any)[key]} placeholder={placeholder}
-                    onChange={(e) => setRenewData(p => ({ ...p, [key]: e.target.value }))}
-                    style={inStyle} />
-                </div>
-              ))}
-              <div>
-                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Payment Mode</label>
-                <select value={renewData.paymentMode} onChange={(e) => setRenewData(p => ({ ...p, paymentMode: e.target.value }))} style={inStyle}>
-                  {["Full Payment", "2 Installments", "3 Installments", "IPF"].map(m => <option key={m}>{m}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Notes</label>
-                <input value={renewData.notes} onChange={(e) => setRenewData(p => ({ ...p, notes: e.target.value }))} placeholder="Any renewal notes..." style={inStyle} />
-              </div>
-              <div style={{ padding: "10px 12px", backgroundColor: "rgba(245,158,11,0.08)", borderRadius: "8px", border: "1px solid rgba(245,158,11,0.2)" }}>
-                <p style={{ fontSize: "11px", color: "#fbbf24", margin: "0 0 2px", fontWeight: 600 }}>💡 Full renewal with benefits?</p>
-                <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>
-                  To carry over benefits or update coverage,{" "}
-                  <Link href={`/customers/${customer?.id}`} style={{ color: "var(--brand)", fontWeight: 600 }}>use the full renewal flow</Link>
-                  {" "}from the customer profile.
-                </p>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button onClick={() => setShowRenewModal(false)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-              <button onClick={handleRenew} disabled={renewSaving}
-                style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 18px", borderRadius: "6px", border: "none", backgroundColor: renewSaving ? "var(--brand-dim)" : "var(--brand)", color: "#000", fontSize: "13px", fontWeight: 700, cursor: renewSaving ? "not-allowed" : "pointer" }}>
-                <RefreshCw size={13} />
-                {renewSaving ? "Renewing..." : "Create Renewal"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );

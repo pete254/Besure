@@ -6,7 +6,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, Upload, X, Eye } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Upload, X, Eye, RefreshCw } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
 import DraftBanner from "@/components/DraftBanner";
 import { useDraft } from "@/hooks/useDraft";
@@ -137,8 +137,15 @@ const emptyPolicy: PolicyData = {
 export default function NewPolicyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [step, setStep] = useState(1);
+  const renewFrom = searchParams.get("renewFrom") || "";
+
+  // Add state for renew mode
+  const [isRenewMode, setIsRenewMode] = useState(!!renewFrom);
+  const [renewSourceId, setRenewSourceId] = useState(renewFrom);
   
+  // Add step state
+  const [step, setStep] = useState(1);
+
   // Initialize with today's date for startDate
   const getTodayDateString = () => new Date().toISOString().split("T")[0];
   
@@ -206,6 +213,72 @@ export default function NewPolicyPage() {
       if (rate) setData(prev => ({ ...prev, basicRate: rate }));
     }
   }, [insurers]); // runs once insurers load
+
+  useEffect(() => {
+    if (!renewFrom) return;
+  
+    async function prefillFromPolicy() {
+      const res = await fetch(`/api/policies/${renewFrom}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      const { policy, vehicle, benefits, insurer, customer } = d;
+      
+      // Calculate new dates: today → today + 1 year - 1 day
+      const today = new Date();
+      const startDate = today.toISOString().split("T")[0];
+      const endDate = new Date(today.setFullYear(today.getFullYear() + 1));
+      endDate.setDate(endDate.getDate() - 1);
+      const endDateStr = endDate.toISOString().split("T")[0];
+      
+      const customerName = customer?.customerType === "Company"
+        ? customer.companyName
+        : `${customer?.firstName} ${customer?.lastName}`;
+      
+      setData(prev => ({
+        ...prev,
+        insuranceType: policy.insuranceType,
+        customerId: policy.customerId,
+        customerName: customerName || "",
+        insurerId: policy.insurerId || "",
+        insurerNameManual: policy.insurerNameManual || "",
+        coverType: policy.coverType || "",
+        sumInsured: policy.sumInsured || "",
+        basicRate: policy.basicRate || "",
+        paymentMode: policy.paymentMode || "Full Payment",
+        ipfProvider: policy.ipfProvider || "",
+        startDate,
+        endDate: endDateStr,
+        policyNumber: "", // blank — new policy number
+        notes: `Renewal of policy ${policy.policyNumber || policy.id.slice(0,8)} (${policy.startDate} – ${policy.endDate})`,
+        vehicle: vehicle ? {
+          make: vehicle.make || "",
+          model: vehicle.model || "",
+          year: String(vehicle.year || ""),
+          cc: String(vehicle.cc || ""),
+          tonnage: String(vehicle.tonnage || ""),
+          seats: String(vehicle.seats || ""),
+          chassisNo: vehicle.chassisNo || "",
+          engineNo: vehicle.engineNo || "",
+          regNo: vehicle.regNo || "",
+          bodyType: vehicle.bodyType || "",
+          colour: vehicle.colour || "",
+        } : prev.vehicle,
+        benefits: (benefits || []).map((b: any) => ({
+          benefitOptionId: b.benefitOptionId || b.id || "",
+          benefitName: b.benefitName,
+          amountKes: b.amountKes,
+        })),
+        totalBenefits: (benefits || [])
+          .reduce((s: number, b: any) => s + parseFloat(b.amountKes || "0"), 0)
+          .toFixed(2),
+      }));
+      
+      // Jump to step 4 (Cover & Valuation) since type/customer/vehicle are prefilled
+      setStep(4);
+    }
+  
+    prefillFromPolicy();
+  }, []); // runs once on mount
 
   useEffect(() => {
     if (!customerSearch || customerSearch.length < 2) { setCustomerResults([]); return; }
@@ -414,32 +487,70 @@ export default function NewPolicyPage() {
   setSaving(true);
   setError("");
   try {
-    // Strip _file references before sending to API
-    const payload = {
-      ...data,
-      trainingLevy: "0",
-      vehicle: isMotor ? {
-        ...data.vehicle,
-        year: parseInt(data.vehicle.year),
-        cc: data.vehicle.cc ? parseInt(data.vehicle.cc) : null,
-        seats: data.vehicle.seats ? parseInt(data.vehicle.seats) : null,
-      } : null,
-      insurerId: data.insurerId || null,
-      insurerNameManual: !data.insurerId ? data.insurerNameManual : null,
-      documents: [], // upload separately after creation
-    };
+    let policyId: string;
+    
+    if (isRenewMode && renewSourceId) {
+      // Use the renew endpoint — handles vehicle copy, marks old expired, etc.
+      const bens = data.benefits.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0);
+      const basic = (parseFloat(data.sumInsured || "0") * parseFloat(data.basicRate || "0") / 100);
+      const iraLevy = (basic + bens) * 0.0045;
+      const grand = (basic + bens + iraLevy + 40).toFixed(2);
+      
+      const res = await fetch(`/api/policies/${renewSourceId}/renew`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: data.startDate,
+          endDate: data.endDate,
+          sumInsured: data.sumInsured,
+          basicRate: data.basicRate,
+          basicPremium: basic.toFixed(2),
+          iraLevy: iraLevy.toFixed(2),
+          trainingLevy: "0",
+          stampDuty: "40",
+          phcf: "0",
+          grandTotal: grand,
+          totalBenefits: bens.toFixed(2),
+          paymentMode: data.paymentMode,
+          policyNumber: data.policyNumber || null,
+          notes: data.notes,
+          benefits: data.benefits.map(b => ({
+            benefitOptionId: b.benefitOptionId || null,
+            benefitName: b.benefitName,
+            amountKes: b.amountKes,
+          })),
+          carryOverDocIds: [], // documents handled separately after
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) { setError(result.error || "Failed to renew policy"); return; }
+      policyId = result.policy.id;
+    } else {
+      // Existing create flow
+      const payload = {
+        ...data,
+        trainingLevy: "0",
+        vehicle: isMotor ? {
+          ...data.vehicle,
+          year: parseInt(data.vehicle.year),
+          cc: data.vehicle.cc ? parseInt(data.vehicle.cc) : null,
+          seats: data.vehicle.seats ? parseInt(data.vehicle.seats) : null,
+        } : null,
+        insurerId: data.insurerId || null,
+        insurerNameManual: !data.insurerId ? data.insurerNameManual : null,
+        documents: [],
+      };
+      const res = await fetch("/api/policies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (!res.ok) { setError(result.error || "Failed to create policy"); return; }
+      policyId = result.policy.id;
+    }
 
-    const res = await fetch("/api/policies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const result = await res.json();
-    if (!res.ok) { setError(result.error || "Failed to create policy"); return; }
-
-    const policyId = result.policy.id;
-
-    // Upload queued documents
+    // Upload queued documents (same for both paths)
     const fileDocs = (data.documents as any[]).filter(d => d._file);
     for (const doc of fileDocs) {
       try {
@@ -449,7 +560,7 @@ export default function NewPolicyPage() {
         fd.append("file",     doc._file);
         await fetch(`/api/policies/${policyId}/documents`, { method: "POST", body: fd });
       } catch {
-        // Non-fatal — docs can be uploaded from policy detail page
+        // Non-fatal — user can upload from policy detail page
       }
     }
 
@@ -631,6 +742,22 @@ export default function NewPolicyPage() {
         onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-muted)")}>
         <ArrowLeft size={14} /> Back to Policies
       </Link>
+
+      {/* Renewal indicator */}
+      {isRenewMode && (
+        <div style={{ 
+          padding: "10px 14px", marginBottom: "16px",
+          backgroundColor: "rgba(16,185,129,0.08)", 
+          border: "1px solid rgba(16,185,129,0.3)", 
+          borderRadius: "8px",
+          display: "flex", alignItems: "center", gap: "8px" 
+        }}>
+          <RefreshCw size={14} color="var(--brand)" />
+          <span style={{ fontSize: "13px", color: "var(--brand)", fontWeight: 600 }}>
+            Renewal Mode — vehicle, benefits and details pre-filled from existing policy
+          </span>
+        </div>
+      )}
 
       {/* Draft banner */}
       <div style={{ marginBottom: "16px" }}>
@@ -1260,7 +1387,7 @@ export default function NewPolicyPage() {
           </button>
         ) : (
           <button className="btn-primary" disabled={saving} onClick={handleSubmit}>
-            <Check size={14} /> {saving ? "Creating Policy..." : "Create Policy"}
+            <Check size={14} /> {saving ? (isRenewMode ? "Renewing..." : "Creating Policy...") : (isRenewMode ? "Renew Policy" : "Create Policy")}
           </button>
         )}
       </div>
