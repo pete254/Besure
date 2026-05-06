@@ -93,11 +93,12 @@ interface RenewModalProps {
   policy: PolicyRow["policy"];
   vehicle: PolicyRow["vehicle"] | null;
   insurer: PolicyRow["insurer"] | null;
+  customerId: string;
   onClose: () => void;
   onSuccess: (newId: string) => void;
 }
 
-function RenewModal({ policy, vehicle, insurer, onClose, onSuccess }: RenewModalProps) {
+function RenewModal({ policy, vehicle, insurer, customerId, onClose, onSuccess }: RenewModalProps & { customerId: string }) {
   // Get today's date in YYYY-MM-DD format for HTML date input
   const today = new Date();
   const year = today.getFullYear();
@@ -113,84 +114,64 @@ function RenewModal({ policy, vehicle, insurer, onClose, onSuccess }: RenewModal
   const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
   const endDay = String(endDate.getDate()).padStart(2, '0');
   const newEnd = `${endYear}-${endMonth}-${endDay}`;
-  
-  console.log('[Renewal Debug] Today:', newStart, 'End Date:', newEnd);
 
-  const [form, setForm] = useState({
-    startDate: newStart,
-    endDate: newEnd,
-    sumInsured: policy.sumInsured || "",
-    basicRate: policy.basicRate || "",
-    policyNumber: "",
-    paymentMode: (policy.paymentMode as any) || "Full Payment",
-    notes: "",
-  });
+  const [form, setForm] = useState({ startDate: newStart, endDate: newEnd, sumInsured: policy.sumInsured || "", basicRate: policy.basicRate || "", policyNumber: "", paymentMode: (policy.paymentMode as any) || "Full Payment", notes: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Ensure form is properly initialized with today's date
+  // Benefits state
+  const [allBenefits, setAllBenefits] = useState<any[]>([]);
+  const [selectedBenefits, setSelectedBenefits] = useState<any[]>([]);
+  const [existingDocs, setExistingDocs] = useState<any[]>([]);
+  const [carryOverDocIds, setCarryOverDocIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<"details" | "benefits" | "documents">("details");
+
   useEffect(() => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
-    
-    const endDate = new Date(today);
-    endDate.setFullYear(endDate.getFullYear() + 1);
-    endDate.setDate(endDate.getDate() - 1);
-    const endYear = endDate.getFullYear();
-    const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
-    const endDay = String(endDate.getDate()).padStart(2, '0');
-    const endStr = `${endYear}-${endMonth}-${endDay}`;
-    
-    console.log('[Renewal useEffect] Setting dates to:', todayStr, endStr);
-    
-    setForm(prev => ({
-      ...prev,
-      startDate: todayStr,
-      endDate: endStr,
-    }));
-  }, [policy.id]); // Re-initialize when policy changes
+    // Load benefits
+    fetch("/api/benefits").then(r => r.json()).then(d => {
+      const active = (d.benefits || []).filter((b: any) => b.isActive);
+      setAllBenefits(active);
+    });
+    // Load existing policy documents
+    fetch(`/api/policies/${policy.id}/documents`).then(r => r.json()).then(d => {
+      const docs = d.documents || [];
+      setExistingDocs(docs);
+      // Pre-select all docs for carry-over
+      setCarryOverDocIds(docs.filter((doc: any) => doc.fileUrl).map((doc: any) => doc.id));
+    });
+  }, [policy.id]);
 
-  const basicPremium = form.sumInsured && form.basicRate
-    ? ((parseFloat(form.sumInsured) * parseFloat(form.basicRate)) / 100).toFixed(2)
-    : "0.00";
-  const iraLevy = (parseFloat(basicPremium) * 0.0045).toFixed(2);
-  const grandTotal = (parseFloat(basicPremium) + parseFloat(iraLevy) + 40 + 100).toFixed(2);
-
-  const inStyle: React.CSSProperties = {
-    width: "100%", padding: "8px 10px",
-    backgroundColor: "var(--bg-app)", border: "1px solid var(--border)",
-    borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none",
+  const DOC_LABELS: Record<string, string> = {
+    VALUATION: "📋 Valuation Report",
+    PROPOSAL:  "📝 Proposal Form",
+    LOGBOOK:   "📖 Logbook",
+    OTHER:     "💰 Quotation",
   };
-  function foc(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-    (e.target as HTMLElement).style.borderColor = "var(--brand)";
-  }
-  function blr(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-    (e.target as HTMLElement).style.borderColor = "var(--border)";
-  }
 
   async function handleRenew() {
-    if (!form.startDate || !form.endDate) {
-      setError("Start and end dates are required");
-      return;
-    }
+    if (!form.startDate || !form.endDate) { setError("Start and end dates are required"); return; }
     setSaving(true);
     setError("");
     try {
+      const bens    = selectedBenefits.reduce((s: number, b: any) => s + parseFloat(b.amountKes || "0"), 0);
+      const basic   = (parseFloat(form.sumInsured || "0") * parseFloat(form.basicRate || "0") / 100);
+      const iraLevy = (basic + bens) * 0.0045;
+      const grand   = (basic + bens + iraLevy + 40).toFixed(2);
+
       const res = await fetch(`/api/policies/${policy.id}/renew`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          basicPremium,
-          iraLevy,
-          trainingLevy: "0",
-          stampDuty: "40",
-          phcf: "100",
-          grandTotal,
-          totalBenefits: "0",
+          basicPremium:   basic.toFixed(2),
+          iraLevy:        iraLevy.toFixed(2),
+          trainingLevy:   "0",
+          stampDuty:      "40",
+          phcf:           "0",
+          grandTotal:     grand,
+          totalBenefits:  bens.toFixed(2),
+          benefits:       selectedBenefits,
+          carryOverDocIds,
         }),
       });
       const data = await res.json();
@@ -204,138 +185,184 @@ function RenewModal({ policy, vehicle, insurer, onClose, onSuccess }: RenewModal
   }
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 50, backgroundColor: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "24px", width: "100%", maxWidth: "520px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 25px 60px rgba(0,0,0,0.5)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "var(--brand-dim)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <RefreshCw size={16} color="var(--brand)" />
+    <div style={{ position: "fixed", inset: 0, zIndex: 50, backgroundColor: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+      onClick={onClose}>
+      <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", width: "100%", maxWidth: "560px", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 60px rgba(0,0,0,0.5)" }}
+        onClick={(e) => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: "20px 24px 0", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "var(--brand-dim)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <RefreshCw size={16} color="var(--brand)" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#ffffff", margin: 0 }}>Renew Policy</h3>
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>
+                  {vehicle ? `${vehicle.make} ${vehicle.model} · ${vehicle.regNo}` : policy.insuranceType}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#ffffff", margin: 0 }}>Renew Policy</h3>
-              <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>
-                {vehicle ? `${vehicle.make} ${vehicle.model} · ${vehicle.regNo}` : policy.insuranceType}
-              </p>
-            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }}><X size={16} /></button>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }}>
-            <X size={16} />
-          </button>
+
+          {/* Tabs */}
+          <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
+            {(["details", "benefits", "documents"] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                style={{ flex: 1, padding: "10px 8px", backgroundColor: "transparent", border: "none", borderBottom: `2px solid ${activeTab === tab ? "var(--brand)" : "transparent"}`, color: activeTab === tab ? "var(--text-primary)" : "var(--text-muted)", fontSize: "12px", fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>
+                {tab === "documents" && existingDocs.filter(d => d.fileUrl).length > 0
+                  ? `Documents (${carryOverDocIds.length}/${existingDocs.filter((d: any) => d.fileUrl).length})` 
+                  : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {error && (
-          <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "12px", marginBottom: "16px" }}>
-            {error}
-          </div>
-        )}
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          {error && <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "12px", marginBottom: "16px" }}>{error}</div>}
 
-        {/* Previous period info */}
-        <div style={{ padding: "10px 12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)", marginBottom: "16px" }}>
-          <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>
-            Previous Period
-          </p>
-          <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>
-            {new Date(policy.startDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })} →{" "}
-            {new Date(policy.endDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
-            {insurer && <span style={{ color: "var(--text-muted)" }}> · {insurer.name}</span>}
-          </p>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {/* Dates */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div>
-              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
-                New Start Date *
-              </label>
-              <input type="date" value={form.startDate} onChange={(e) => setForm(p => ({ ...p, startDate: e.target.value }))} style={inStyle} onFocus={foc} onBlur={blr} />
-            </div>
-            <div>
-              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
-                New End Date *
-              </label>
-              <input type="date" value={form.endDate} onChange={(e) => setForm(p => ({ ...p, endDate: e.target.value }))} style={inStyle} onFocus={foc} onBlur={blr} />
-            </div>
-          </div>
-
-          {/* Sum insured + rate */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div>
-              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
-                Sum Insured (KES)
-              </label>
-              <input type="number" value={form.sumInsured} onChange={(e) => setForm(p => ({ ...p, sumInsured: e.target.value }))} placeholder="e.g. 1500000" style={inStyle} onFocus={foc} onBlur={blr} />
-            </div>
-            <div>
-              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
-                Rate (%)
-              </label>
-              <input type="number" step="0.01" value={form.basicRate} onChange={(e) => setForm(p => ({ ...p, basicRate: e.target.value }))} placeholder="e.g. 4.00" style={inStyle} onFocus={foc} onBlur={blr} />
-            </div>
-          </div>
-
-          {/* Premium preview */}
-          {parseFloat(basicPremium) > 0 && (
-            <div style={{ padding: "10px 12px", backgroundColor: "var(--brand-dim)", borderRadius: "8px", border: "1px solid var(--brand)" }}>
-              <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--brand)", textTransform: "uppercase", marginBottom: "6px" }}>Estimated Premium</p>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Basic Premium</span>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>KES {parseFloat(basicPremium).toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+          {/* ── Details Tab ── */}
+          {activeTab === "details" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {/* Previous period */}
+              <div style={{ padding: "10px 12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Previous Period</p>
+                <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>
+                  {new Date(policy.startDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })} →{" "}
+                  {new Date(policy.endDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                  {insurer && <span style={{ color: "var(--text-muted)" }}> · {insurer.name}</span>}
+                </p>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>IRA Levy + Stamp + PHCF</span>
-                <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>KES {(parseFloat(iraLevy) + 140).toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                {[
+                  { key: "startDate", label: "New Start Date *", type: "date" },
+                  { key: "endDate",   label: "New End Date *",   type: "date" },
+                  { key: "sumInsured", label: "Sum Insured (KES)", type: "number", placeholder: "e.g. 1500000" },
+                  { key: "basicRate",  label: "Rate (%)",          type: "number", placeholder: "e.g. 4.00" },
+                ].map(({ key, label, type, placeholder }) => (
+                  <div key={key}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>{label}</label>
+                    <input type={type} value={(form as any)[key]} placeholder={placeholder}
+                      onChange={(e) => setForm(p => ({ ...p, [key]: e.target.value }))}
+                      style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
+                  </div>
+                ))}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(16,185,129,0.3)", paddingTop: "4px", marginTop: "4px" }}>
-                <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--brand)" }}>Grand Total</span>
-                <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--brand)" }}>KES {parseFloat(grandTotal).toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+              {/* Premium preview */}
+              {parseFloat(form.sumInsured || "0") > 0 && parseFloat(form.basicRate || "0") > 0 && (() => {
+                const basic = (parseFloat(form.sumInsured) * parseFloat(form.basicRate) / 100);
+                const bens  = selectedBenefits.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0);
+                const ira   = (basic + bens) * 0.0045;
+                const grand = basic + bens + ira + 40;
+                return (
+                  <div style={{ padding: "10px 12px", backgroundColor: "var(--brand-dim)", borderRadius: "8px", border: "1px solid var(--brand)" }}>
+                    <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--brand)", textTransform: "uppercase", marginBottom: "6px" }}>Estimated Premium</p>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Basic Premium</span><span style={{ fontSize: "12px", fontWeight: 600, color: "#ffffff" }}>KES {basic.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                    {bens > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Benefits</span><span style={{ fontSize: "12px", color: "#ffffff" }}>KES {bens.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>}
+                    <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(16,185,129,0.3)", paddingTop: "4px", marginTop: "4px" }}><span style={{ fontSize: "13px", fontWeight: 700, color: "var(--brand)" }}>Grand Total</span><span style={{ fontSize: "13px", fontWeight: 700, color: "var(--brand)" }}>KES {grand.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                  </div>
+                );
+              })()}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Payment Mode</label>
+                  <select value={form.paymentMode} onChange={(e) => setForm(p => ({ ...p, paymentMode: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }}>
+                    {["Full Payment", "2 Installments", "3 Installments", "IPF"].map(m => <option key={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>New Policy Number</label>
+                  <input value={form.policyNumber} onChange={(e) => setForm(p => ({ ...p, policyNumber: e.target.value }))} placeholder="Add later if pending"
+                    style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Notes (optional)</label>
+                <input value={form.notes} onChange={(e) => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Any renewal notes..."
+                  style={{ width: "100%", padding: "8px 10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "6px", color: "#ffffff", fontSize: "13px", outline: "none" }} />
               </div>
             </div>
           )}
 
-          {/* Payment mode + policy number */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div>
-              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
-                Payment Mode
-              </label>
-              <select value={form.paymentMode} onChange={(e) => setForm(p => ({ ...p, paymentMode: e.target.value }))} style={inStyle} onFocus={foc} onBlur={blr}>
-                {["Full Payment", "2 Installments", "3 Installments", "IPF"].map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </select>
+          {/* ── Benefits Tab ── */}
+          {activeTab === "benefits" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>
+                Select benefits for the renewed policy.
+              </p>
+              {allBenefits.length === 0 ? (
+                <p style={{ color: "var(--text-muted)", fontSize: "13px", textAlign: "center", padding: "24px" }}>Loading benefits...</p>
+              ) : (
+                allBenefits.map((b: any) => {
+                  const selected = selectedBenefits.find((x: any) => x.benefitOptionId === b.id);
+                  return (
+                    <div key={b.id} style={{ padding: "12px", borderRadius: "8px", border: `1px solid ${selected ? "var(--brand)" : "var(--border)"}`, backgroundColor: selected ? "rgba(16,185,129,0.04)" : "var(--bg-app)", display: "flex", alignItems: "center", gap: "10px" }}>
+                      <input type="checkbox" checked={!!selected} onChange={() => {
+                        setSelectedBenefits(prev => {
+                          const exists = prev.find((x: any) => x.benefitOptionId === b.id);
+                          if (exists) return prev.filter((x: any) => x.benefitOptionId !== b.id);
+                          return [...prev, { benefitOptionId: b.id, benefitName: b.name, amountKes: "0.00" }];
+                        });
+                      }} style={{ width: "15px", height: "15px", margin: 0, accentColor: "var(--brand)" }} />
+                      <span style={{ fontSize: "13px", fontWeight: 600, flex: 1, color: selected ? "#ffffff" : "var(--text-secondary)" }}>{b.name}</span>
+                      {selected && (
+                        <input type="number" placeholder="0.00" value={selected.amountKes}
+                          onChange={(e) => setSelectedBenefits(prev => prev.map((x: any) => x.benefitOptionId === b.id ? { ...x, amountKes: e.target.value } : x))}
+                          style={{ width: "110px", padding: "5px 8px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", color: "var(--brand)", fontSize: "13px", fontWeight: 600, outline: "none" }} />
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
-            <div>
-              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
-                New Policy Number
-              </label>
-              <input value={form.policyNumber} onChange={(e) => setForm(p => ({ ...p, policyNumber: e.target.value }))} placeholder="Add later if pending" style={inStyle} onFocus={foc} onBlur={blr} />
-            </div>
-          </div>
+          )}
 
-          <div>
-            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
-              Notes (optional)
-            </label>
-            <input value={form.notes} onChange={(e) => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Any renewal notes..." style={inStyle} onFocus={foc} onBlur={blr} />
-          </div>
+          {/* ── Documents Tab ── */}
+          {activeTab === "documents" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {existingDocs.filter((d: any) => d.fileUrl).length === 0 ? (
+                <div style={{ padding: "32px", textAlign: "center", color: "var(--text-muted)" }}>
+                  <p style={{ fontSize: "13px", margin: 0 }}>No documents on the existing policy.</p>
+                </div>
+              ) : (
+                <>
+                  <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>
+                    Select which documents to carry over to the renewed policy.
+                  </p>
+                  {existingDocs.filter((d: any) => d.fileUrl).map((doc: any) => {
+                    const isSelected = carryOverDocIds.includes(doc.id);
+                    return (
+                      <div key={doc.id} style={{ padding: "12px 14px", borderRadius: "8px", border: `1px solid ${isSelected ? "rgba(16,185,129,0.35)" : "var(--border)"}`, backgroundColor: isSelected ? "rgba(16,185,129,0.04)" : "var(--bg-app)", display: "flex", alignItems: "center", gap: "10px" }}>
+                        <input type="checkbox" checked={isSelected}
+                          onChange={() => setCarryOverDocIds(prev => isSelected ? prev.filter(id => id !== doc.id) : [...prev, doc.id])}
+                          style={{ width: "15px", height: "15px", margin: 0, accentColor: "var(--brand)" }} />
+                        <span style={{ fontSize: "18px" }}>{DOC_LABELS[doc.docType]?.charAt(0) || "📄"}</span>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", margin: 0 }}>{DOC_LABELS[doc.docType] || doc.docType}</p>
+                          <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>{doc.docLabel}</p>
+                        </div>
+                        <button onClick={() => window.open(doc.fileUrl, "_blank")}
+                          style={{ padding: "5px 8px", borderRadius: "6px", border: "1px solid var(--brand)", backgroundColor: "var(--brand-dim)", color: "var(--brand)", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>
+                          View
+                        </button>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
-        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
-          <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-            Cancel
-          </button>
-          <button
-            onClick={handleRenew}
-            disabled={saving}
-            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 18px", borderRadius: "8px", border: "none", backgroundColor: saving ? "var(--brand-dim)" : "var(--brand)", color: "#000", fontSize: "13px", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}
-          >
+        {/* Footer */}
+        <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border)", display: "flex", gap: "10px", justifyContent: "flex-end", flexShrink: 0 }}>
+          <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          <button onClick={handleRenew} disabled={saving}
+            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 18px", borderRadius: "8px", border: "none", backgroundColor: saving ? "var(--brand-dim)" : "var(--brand)", color: "#000", fontSize: "13px", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
             <RefreshCw size={13} />
             {saving ? "Renewing..." : "Create Renewal"}
           </button>
@@ -849,6 +876,7 @@ export default function CustomerProfilePage() {
           policy={renewTarget.policy}
           vehicle={renewTarget.vehicle}
           insurer={renewTarget.insurer}
+          customerId={customer.id}
           onClose={() => setRenewTarget(null)}
           onSuccess={(newId) => {
             setRenewTarget(null);

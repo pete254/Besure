@@ -389,36 +389,56 @@ export default function NewPolicyPage() {
   }
 
   async function handleSubmit() {
-    setSaving(true);
-    setError("");
-    try {
-      const payload = {
-        ...data,
-        trainingLevy: "0",
-        vehicle: isMotor ? {
-          ...data.vehicle,
-          year: parseInt(data.vehicle.year),
-          cc: data.vehicle.cc ? parseInt(data.vehicle.cc) : null,
-          seats: data.vehicle.seats ? parseInt(data.vehicle.seats) : null,
-        } : null,
-        insurerId: data.insurerId || null,
-        insurerNameManual: !data.insurerId ? data.insurerNameManual : null,
-      };
-      const res = await fetch("/api/policies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const result = await res.json();
-      if (!res.ok) { setError(result.error || "Failed to create policy"); return; }
-      await clearDraft();
-      router.push(`/policies/${result.policy.id}`);
-    } catch {
-      setError("Something went wrong.");
-    } finally {
-      setSaving(false);
+  setSaving(true);
+  setError("");
+  try {
+    // Strip _file references before sending to API
+    const payload = {
+      ...data,
+      trainingLevy: "0",
+      vehicle: isMotor ? {
+        ...data.vehicle,
+        year: parseInt(data.vehicle.year),
+        cc: data.vehicle.cc ? parseInt(data.vehicle.cc) : null,
+        seats: data.vehicle.seats ? parseInt(data.vehicle.seats) : null,
+      } : null,
+      insurerId: data.insurerId || null,
+      insurerNameManual: !data.insurerId ? data.insurerNameManual : null,
+      documents: [], // upload separately after creation
+    };
+
+    const res = await fetch("/api/policies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await res.json();
+    if (!res.ok) { setError(result.error || "Failed to create policy"); return; }
+
+    const policyId = result.policy.id;
+
+    // Upload queued documents
+    const fileDocs = (data.documents as any[]).filter(d => d._file);
+    for (const doc of fileDocs) {
+      try {
+        const fd = new FormData();
+        fd.append("docType",  doc.docType);
+        fd.append("docLabel", doc.docLabel);
+        fd.append("file",     doc._file);
+        await fetch(`/api/policies/${policyId}/documents`, { method: "POST", body: fd });
+      } catch {
+        // Non-fatal — docs can be uploaded from policy detail page
+      }
     }
+
+    await clearDraft();
+    router.push(`/policies/${policyId}`);
+  } catch {
+    setError("Something went wrong.");
+  } finally {
+    setSaving(false);
   }
+}
 
   const inStyle: React.CSSProperties = {
     width: "100%", padding: "9px 12px",
@@ -1012,100 +1032,89 @@ export default function NewPolicyPage() {
       {/* ── STEP 7: Documents Upload ── */}
       {step === 7 && (
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
-          <div style={{ marginBottom: "16px" }}>
-            <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#ffffff", margin: "0 0 8px" }}>
-              Policy Documents (Optional)
+          <div style={{ marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+            <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", margin: "0 0 4px" }}>
+              Policy Documents
+              <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "12px", marginLeft: "8px" }}>(optional — can be uploaded later)</span>
             </h3>
-            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "0 0 16px" }}>
-              Upload supporting documents for this policy. These are optional and can be updated later.
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>
+              Upload supporting documents now or skip and add them from the policy details page.
             </p>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {["VALUATION", "PROPOSAL", "LOGBOOK", "QUOTATION"].map((docType) => {
-              const existingDoc = data.documents.find(d => d.docType === docType);
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {[
+              { type: "VALUATION", label: "Valuation Report", icon: "📋", desc: "Vehicle valuation from certified assessor" },
+              { type: "PROPOSAL",  label: "Proposal Form",   icon: "📝", desc: "Signed insurance proposal / application form" },
+              { type: "LOGBOOK",   label: "Logbook",         icon: "📖", desc: "Original or certified copy of vehicle logbook" },
+              { type: "OTHER",     label: "Quotation",       icon: "💰", desc: "Insurance quotation document" },
+            ].map(({ type, label, icon, desc }) => {
+              const existing = data.documents.find(d => d.docType === type);
               return (
-                <div key={docType} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", marginBottom: "2px" }}>
-                      {docType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </div>
-                    {existingDoc && (
-                      <div style={{ fontSize: "11px", color: "var(--brand)" }}>
-                        Uploaded: {existingDoc.docLabel}
-                      </div>
-                    )}
+                <div key={type} style={{
+                  padding: "14px 16px", borderRadius: "10px",
+                  border: `1px solid ${existing ? "rgba(16,185,129,0.35)" : "var(--border)"}`,
+                  backgroundColor: existing ? "rgba(16,185,129,0.04)" : "var(--bg-app)",
+                  display: "flex", alignItems: "center", gap: "12px",
+                }}>
+                  <div style={{
+                    width: "40px", height: "40px", borderRadius: "8px", flexShrink: 0, fontSize: "18px",
+                    backgroundColor: existing ? "rgba(16,185,129,0.12)" : "var(--bg-card)",
+                    border: `1px solid ${existing ? "var(--brand)" : "var(--border)"}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {icon}
                   </div>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    {existingDoc ? (
-                      <>
-                        <button
-                          onClick={() => window.open(existingDoc.fileUrl, '_blank')}
-                          style={{ padding: "4px 8px", fontSize: "11px", border: "1px solid var(--brand)", borderRadius: "4px", backgroundColor: "var(--brand-dim)", color: "var(--brand)", cursor: "pointer" }}
-                        >
-                          <Eye size={10} style={{ marginRight: "4px" }} />
-                          View
-                        </button>
-                        <button
-                          onClick={() => {
-                            setData(prev => ({
-                              ...prev,
-                              documents: prev.documents.filter(d => d.docType !== docType)
-                            }));
-                          }}
-                          style={{ padding: "4px 8px", fontSize: "11px", border: "1px solid #ef4444", borderRadius: "4px", backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444", cursor: "pointer" }}
-                        >
-                          Remove
-                        </button>
-                      </>
-                    ) : (
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <p style={{ fontSize: "13px", fontWeight: 600, color: existing ? "#ffffff" : "var(--text-secondary)", margin: 0 }}>{label}</p>
+                      {existing && <span style={{ padding: "1px 7px", borderRadius: "20px", fontSize: "10px", fontWeight: 600, backgroundColor: "rgba(16,185,129,0.15)", color: "var(--brand)" }}>Queued</span>}
+                    </div>
+                    <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "2px 0 0" }}>
+                      {existing ? existing.docLabel : desc}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                    {existing && (
                       <button
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = '.pdf,.jpg,.jpeg,.png';
-                          input.onchange = async (e) => {
-                            const file = (e.target as HTMLInputElement).files?.[0];
-                            if (file) {
-                              try {
-                                // Upload to Vercel Blob storage
-                                const filename = `policies/${docType.toLowerCase()}_${Date.now()}_${file.name}`;
-                                const result = await uploadToBlob(file, filename, file.type);
-                                
-                                const newDoc: PolicyDocument = {
-                                  docType,
-                                  fileUrl: result.url,
-                                  blobKey: filename,
-                                  docLabel: file.name
-                                };
-                                
-                                setData(prev => ({
-                                  ...prev,
-                                  documents: [...prev.documents, newDoc]
-                                }));
-                              } catch (error) {
-                                console.error('Upload failed:', error);
-                                alert('Failed to upload document. Please try again.');
-                              }
-                            }
-                          };
-                          input.click();
-                        }}
-                        style={{ padding: "4px 8px", fontSize: "11px", border: "1px solid var(--brand)", borderRadius: "4px", backgroundColor: "var(--brand-dim)", color: "var(--brand)", cursor: "pointer" }}
+                        type="button"
+                        onClick={() => setData(prev => ({ ...prev, documents: prev.documents.filter(d => d.docType !== type) }))}
+                        style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid rgba(239,68,68,0.4)", backgroundColor: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                       >
-                        <Upload size={10} style={{ marginRight: "4px" }} />
-                        Upload
+                        Remove
                       </button>
                     )}
+                    <label style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)"; (e.currentTarget as HTMLElement).style.color = "var(--brand)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)"; }}>
+                      <Upload size={12} />
+                      {existing ? "Replace" : "Select"}
+                      <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          // Store file reference for upload after policy creation
+                          const docEntry = { docType: type, fileUrl: "", blobKey: "", docLabel: file.name, _file: file };
+                          setData(prev => ({
+                            ...prev,
+                            documents: [
+                              ...prev.documents.filter(d => d.docType !== type),
+                              docEntry as any,
+                            ],
+                          }));
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          <div style={{ marginTop: "16px", padding: "12px", backgroundColor: "rgba(16,185,129,0.1)", borderRadius: "8px", border: "1px solid rgba(16,185,129,0.2)" }}>
+          <div style={{ marginTop: "14px", padding: "12px", backgroundColor: "rgba(16,185,129,0.06)", borderRadius: "8px", border: "1px solid rgba(16,185,129,0.2)" }}>
             <p style={{ fontSize: "11px", color: "var(--brand)", margin: 0 }}>
-              💡 Documents are optional and can be uploaded later from the policy details page.
+              💡 Files are uploaded when you click <strong>Create Policy</strong>. You can also skip this step entirely.
             </p>
           </div>
         </div>

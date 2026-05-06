@@ -16,29 +16,19 @@ const renewSchema = z.object({
   iraLevy: z.string().optional().nullable(),
   trainingLevy: z.string().optional().nullable(),
   stampDuty: z.string().default("40"),
-  phcf: z.string().default("100"),
+  phcf: z.string().default("0"),
   grandTotal: z.string().optional().nullable(),
+  totalBenefits: z.string().default("0"),
   paymentMode: z.enum(["Full Payment", "2 Installments", "3 Installments", "IPF"]),
   policyNumber: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
-  // Allow overriding benefits for renewal
-  benefits: z
-    .array(
-      z.object({
-        benefitOptionId: z.string().optional().nullable(),
-        benefitName: z.string(),
-        amountKes: z.string(),
-      })
-    )
-    .optional(),
-  totalBenefits: z.string().default("0"),
-  documents: z.array(z.object({
-    id: z.string(),
-    docType: z.string(),
-    fileUrl: z.string(),
-    blobKey: z.string(),
-    docLabel: z.string(),
-  })).default([]),
+  benefits: z.array(z.object({
+    benefitOptionId: z.string().optional().nullable(),
+    benefitName: z.string(),
+    amountKes: z.string(),
+  })).optional(),
+  // Documents to carry over (array of existing policyDocument IDs)
+  carryOverDocIds: z.array(z.string()).default([]),
 });
 
 // POST /api/policies/[id]/renew
@@ -144,18 +134,28 @@ export async function POST(
       );
     }
 
-    // Copy selected documents to renewed policy
-    if (data.documents && data.documents.length > 0) {
-      await db.insert(policyDocuments).values(
-        data.documents.map((doc) => ({
-          policyId: renewedPolicy.id,
-          docType: doc.docType as any,
-          docLabel: doc.docLabel,
-          status: "Received" as any,
-          fileUrl: doc.fileUrl,
-          blobKey: doc.blobKey,
-        }))
-      );
+    // Carry over selected documents by duplicating their records
+    if (data.carryOverDocIds.length > 0) {
+      const existingDocs = await db
+        .select()
+        .from(policyDocuments)
+        .where(eq(policyDocuments.policyId, id));
+
+      const docsToCarry = existingDocs.filter(d => data.carryOverDocIds.includes(d.id));
+
+      if (docsToCarry.length > 0) {
+        await db.insert(policyDocuments).values(
+          docsToCarry.map(d => ({
+            policyId:     renewedPolicy.id,
+            docType:      d.docType,
+            docLabel:     d.docLabel,
+            status:       d.status,
+            fileUrl:      d.fileUrl,
+            blobKey:      d.blobKey,
+            receivedDate: d.receivedDate,
+          }))
+        );
+      }
     }
 
     // Create payment schedule
