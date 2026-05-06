@@ -142,11 +142,23 @@ export default function NewPolicyPage() {
   // Initialize with today's date for startDate
   const getTodayDateString = () => new Date().toISOString().split("T")[0];
   
-  const [data, setData] = useState<PolicyData>({
+  const [data, setData] = useState<PolicyData>(() => {
+  const typeFromUrl = searchParams.get("insuranceType") || "";
+  const insurerIdFromUrl = searchParams.get("insurerId") || "";
+  const sumInsuredFromUrl = searchParams.get("sumInsured") || "";
+  const basicRateFromUrl = searchParams.get("basicRate") || "";
+  
+  return {
     ...emptyPolicy,
     customerId: searchParams.get("customerId") || "",
     startDate: getTodayDateString(),
-  });
+    insuranceType: typeFromUrl,
+    insurerId: insurerIdFromUrl,
+    sumInsured: sumInsuredFromUrl,
+    basicRate: basicRateFromUrl,
+    insurerNameManual: searchParams.get("insurerNameManual") || "",
+  };
+});
   const [insurers, setInsurers] = useState<Insurer[]>([]);
   const [allBenefits, setAllBenefits] = useState<Benefit[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
@@ -183,6 +195,17 @@ export default function NewPolicyPage() {
     fetch("/api/benefits").then(r => r.json()).then(d =>
       setAllBenefits(d.benefits?.filter((b: Benefit) => b.isActive) || []));
   }, []);
+
+  // Add after existing insurers/benefits useEffect
+  useEffect(() => {
+    if (!data.insurerId || !insurers.length || data.basicRate) return;
+    // Only auto-fill rate if not already set from URL
+    const ins = insurers.find(i => i.id === data.insurerId);
+    if (ins) {
+      const rate = getInsurerRateField(data.insuranceType, ins);
+      if (rate) setData(prev => ({ ...prev, basicRate: rate }));
+    }
+  }, [insurers]); // runs once insurers load
 
   useEffect(() => {
     if (!customerSearch || customerSearch.length < 2) { setCustomerResults([]); return; }

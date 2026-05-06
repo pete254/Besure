@@ -12,8 +12,12 @@ import { z } from "zod";
 const calcSchema = z.object({
   insuranceType: z.enum([
     "Motor - Private",
+    "Motor - Private Comp",
     "Motor - Commercial",
     "Motor - PSV / Matatu",
+    "Motor - Commercial Institutional",
+    "Motor - Commercial TSV",
+    "Motor - Commercial Third Party",
   ]),
   insurerId: z.string().uuid().optional().nullable(),
   sumInsured: z.number().positive(),

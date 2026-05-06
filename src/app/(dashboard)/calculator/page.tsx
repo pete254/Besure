@@ -59,11 +59,13 @@ interface ClientInfo {
 }
 
 const INSURANCE_TYPES = [
+  { value: "Motor - Private", label: "Motor — Private", group: "private" },
   { value: "Motor - Private Comp", label: "Motor — Private Comp", group: "private" },
   { value: "Motor - Commercial", label: "Motor — Commercial", group: "commercial" },
   { value: "Motor - PSV / Matatu", label: "Motor — PSV / Matatu", group: "commercial" },
   { value: "Motor - Commercial Institutional", label: "Motor — Commercial Institutional", group: "commercial" },
   { value: "Motor - Commercial TSV", label: "Motor — Commercial TSV", group: "commercial" },
+  { value: "Motor - Commercial Third Party", label: "Motor — Commercial Third Party", group: "commercial" },
 ];
 
 function getBenefitGroup(insuranceType: string): "private" | "commercial" | "none" {
@@ -852,7 +854,7 @@ export default function CalculatorPage() {
                   </button>
                 </div>
                 <a
-                  href={`/policies/new?${selectedInsurerId ? `insurerId=${selectedInsurerId}&` : ""}sumInsured=${sumInsured}&basicRate=${basicRate}&insuranceType=${encodeURIComponent(insuranceType)}`}
+                  href={`/policies/new?${selectedInsurerId ? `insurerId=${selectedInsurerId}&` : `insurerNameManual=${encodeURIComponent(manualInsurer || result?.insurer?.name || "")}&`}sumInsured=${sumInsured}&basicRate=${basicRate}&insuranceType=${encodeURIComponent(insuranceType)}`}
                   style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "9px", backgroundColor: "var(--brand)", color: "#000", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 700, textDecoration: "none", cursor: "pointer" }}
                 >
                   Create Policy with this Quote
