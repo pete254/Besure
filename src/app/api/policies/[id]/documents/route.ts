@@ -4,14 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { policyDocuments, policies } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { uploadToCloudinary, deleteFromCloudinary, type CloudinaryFolder } from "@/lib/cloudinary";
-
-const DOC_FOLDER_MAP: Record<string, CloudinaryFolder> = {
-  VALUATION:  "myloe/policies/valuations",
-  PROPOSAL:   "myloe/policies/valuations",
-  LOGBOOK:    "myloe/policies/logbooks",
-  OTHER:      "myloe/policies/valuations",
-};
+import { put, del } from "@vercel/blob";
 
 // POST /api/policies/[id]/documents — accepts multipart FormData
 export async function POST(
@@ -33,7 +26,6 @@ export async function POST(
     const formData = await req.formData();
     const docType  = formData.get("docType")  as string;
     const docLabel = formData.get("docLabel") as string | null;
-    const status   = formData.get("status")   as string | null;
     const file     = formData.get("file")     as File | null;
 
     if (!docType) {
@@ -44,18 +36,19 @@ export async function POST(
     let blobKey: string | null = null;
 
     if (file && file.size > 0) {
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer      = Buffer.from(arrayBuffer);
-      const folder      = DOC_FOLDER_MAP[docType] || "myloe/policies/valuations";
-      const ext         = file.name?.split(".").pop() || "pdf";
-      const filename    = `${id}_${docType}_${Date.now()}.${ext}`;
+      const ext      = file.name?.split(".").pop() || "pdf";
+      const filename = `policies/${id}/${docType}/${id}_${docType}_${Date.now()}.${ext}`;
 
-      const result = await uploadToCloudinary(buffer, folder as CloudinaryFolder, filename);
-      fileUrl = result.secureUrl;
-      blobKey = result.publicId;
+      const blob = await put(filename, file, {
+        access: "public",
+        contentType: file.type || "application/octet-stream",
+      });
+
+      fileUrl = blob.url;
+      blobKey = filename; // store path as key for deletion later
     }
 
-    // Upsert: if same docType exists for this policy, replace it
+    // Upsert: if same docType already exists for this policy, replace it
     const existing = await db
       .select()
       .from(policyDocuments)
@@ -64,9 +57,13 @@ export async function POST(
     const sameType = existing.find(d => d.docType === (docType as any));
 
     if (sameType) {
-      // Delete old file from Cloudinary if replacing
+      // Delete old blob file if we are replacing it
       if (sameType.blobKey && fileUrl) {
-        try { await deleteFromCloudinary(sameType.blobKey); } catch {}
+        try {
+          await del(sameType.fileUrl!); // Vercel Blob del takes the full URL
+        } catch {
+          // Non-fatal — old file cleanup is best-effort
+        }
       }
 
       const [updated] = await db
@@ -75,9 +72,11 @@ export async function POST(
           fileUrl:      fileUrl  || sameType.fileUrl,
           blobKey:      blobKey  || sameType.blobKey,
           docLabel:     docLabel || sameType.docLabel,
-          status:       (status as any) || sameType.status,
-          receivedDate: fileUrl ? new Date().toISOString().split("T")[0] : sameType.receivedDate,
-          updatedAt:    new Date(),
+          status:       fileUrl ? "Received" : sameType.status,
+          receivedDate: fileUrl
+            ? new Date().toISOString().split("T")[0]
+            : sameType.receivedDate,
+          updatedAt: new Date(),
         })
         .where(eq(policyDocuments.id, sameType.id))
         .returning();
@@ -85,6 +84,7 @@ export async function POST(
       return NextResponse.json({ document: updated });
     }
 
+    // Insert new document record
     const [newDoc] = await db
       .insert(policyDocuments)
       .values({
@@ -92,16 +92,21 @@ export async function POST(
         docType:      docType as any,
         docLabel:     docLabel || docType,
         status:       fileUrl ? "Received" : "Pending",
-        fileUrl:      fileUrl,
-        blobKey:      blobKey,
-        receivedDate: fileUrl ? new Date().toISOString().split("T")[0] : null,
+        fileUrl,
+        blobKey,
+        receivedDate: fileUrl
+          ? new Date().toISOString().split("T")[0]
+          : null,
       })
       .returning();
 
     return NextResponse.json({ document: newDoc }, { status: 201 });
   } catch (error) {
     console.error("POST /api/policies/[id]/documents error:", error);
-    return NextResponse.json({ error: "Failed to upload document" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to upload document" },
+      { status: 500 }
+    );
   }
 }
 
@@ -119,6 +124,9 @@ export async function GET(
     return NextResponse.json({ documents: docs });
   } catch (error) {
     console.error("GET /api/policies/[id]/documents error:", error);
-    return NextResponse.json({ error: "Failed to fetch documents" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch documents" },
+      { status: 500 }
+    );
   }
 }

@@ -10,7 +10,6 @@ import { ArrowLeft, ArrowRight, Check, Upload, X, Eye } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
 import DraftBanner from "@/components/DraftBanner";
 import { useDraft } from "@/hooks/useDraft";
-import { uploadToBlob } from "@/lib/vercel-blob";
 import {
   validateRequired,
   validateYear,
