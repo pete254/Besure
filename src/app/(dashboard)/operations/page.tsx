@@ -587,7 +587,7 @@ export default function OperationsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch("/api/dashboard");
+        const res = await fetch("/api/dashboard/summary");
         if (!res.ok) throw new Error("Failed to fetch data");
         const dashboardData = await res.json();
         
