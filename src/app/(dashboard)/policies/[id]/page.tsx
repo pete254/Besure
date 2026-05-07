@@ -39,6 +39,18 @@ interface Policy {
   // NEW renewal fields
   renewedByPolicyId?: string | null;
   renewsPolicyId?: string | null;
+  // Medical metadata
+  medicalMeta?: {
+    inpatientLimit?: string | null;
+    outpatientLimit?: string | null;
+    principalCount?: number | null;
+    dependantCount?: number | null;
+    hasWaitingPeriod?: boolean | null;
+    waitingPeriodDays?: number | null;
+    maternityEnabled?: boolean | null;
+    dentalEnabled?: boolean | null;
+    opticalEnabled?: boolean | null;
+  } | null;
 }
 
 interface Vehicle {
@@ -507,6 +519,48 @@ export default function PolicyDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* Medical Cover Details */}
+      {policy.insuranceType === "Medical / Health" && policy.medicalMeta && (
+        <div className="card">
+          <p className="card-title">
+            🏥 Medical Cover Details
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
+            <Field label="Inpatient Limit" value={formatKES(policy.medicalMeta.inpatientLimit)} />
+            <Field label="Outpatient Limit" value={formatKES(policy.medicalMeta.outpatientLimit)} />
+            <Field label="Principal Members" value={String(policy.medicalMeta.principalCount || 1)} />
+            <Field label="Dependants" value={String(policy.medicalMeta.dependantCount || 0)} />
+            <Field label="Waiting Period" value={policy.medicalMeta.hasWaitingPeriod ? `${policy.medicalMeta.waitingPeriodDays} days` : "None"} />
+          </div>
+          
+          {/* Optional benefits flags */}
+          {(policy.medicalMeta.maternityEnabled || policy.medicalMeta.dentalEnabled || policy.medicalMeta.opticalEnabled) && (
+            <div style={{ marginTop: "16px", padding: "12px", backgroundColor: "var(--bg-app)", borderRadius: "8px" }}>
+              <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "8px" }}>
+                Optional Benefits Included
+              </p>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                {policy.medicalMeta.maternityEnabled && (
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 8px", backgroundColor: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "12px", fontSize: "12px", color: "var(--brand)" }}>
+                    🤱 Maternity
+                  </span>
+                )}
+                {policy.medicalMeta.dentalEnabled && (
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 8px", backgroundColor: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "12px", fontSize: "12px", color: "var(--brand)" }}>
+                    🦷 Dental
+                  </span>
+                )}
+                {policy.medicalMeta.opticalEnabled && (
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 8px", backgroundColor: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "12px", fontSize: "12px", color: "var(--brand)" }}>
+                    👁️ Optical
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Vehicle */}
       {vehicle && (

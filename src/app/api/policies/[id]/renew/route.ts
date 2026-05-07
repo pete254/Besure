@@ -20,6 +20,7 @@ const renewSchema = z.object({
   paymentMode: z.enum(["Full Payment", "2 Installments", "3 Installments", "IPF"]),
   policyNumber: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  medicalMeta: z.any().optional().nullable(),
   benefits: z.array(z.object({
     benefitOptionId: z.string().optional().nullable(),
     benefitName: z.string(),
@@ -94,6 +95,7 @@ export async function POST(
         certificateExpiryDate: data.endDate,
         certificateExpiryReason: null,
         notes: data.notes || `Renewal of policy from ${original.startDate} – ${original.endDate}`,
+        medicalMeta: data.medicalMeta || original.medicalMeta || null,
         // NEW: The renewal starts as Active (will be "Pending" visually if start date is future)
         status: "Active",
         // NEW: Link back to the original policy

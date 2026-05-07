@@ -59,6 +59,17 @@ const createPolicySchema = z.object({
   ipfProvider: z.string().optional().nullable(),
   ipfLoanReference: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  medicalMeta: z.object({
+    inpatientLimit: z.string().optional().nullable(),
+    outpatientLimit: z.string().optional().nullable(),
+    principalCount: z.number().int().min(1).optional().nullable(),
+    dependantCount: z.number().int().min(0).optional().nullable(),
+    hasWaitingPeriod: z.boolean().optional().nullable(),
+    waitingPeriodDays: z.number().int().optional().nullable(),
+    maternityEnabled: z.boolean().optional().nullable(),
+    dentalEnabled: z.boolean().optional().nullable(),
+    opticalEnabled: z.boolean().optional().nullable(),
+  }).optional().nullable(),
   documents: z.array(z.object({
     docType: z.string(),
     fileUrl: z.string(),
@@ -141,7 +152,9 @@ export async function POST(req: NextRequest) {
       policyNumber: data.policyNumber || null,
       startDate: data.startDate,
       endDate: data.endDate,
-      sumInsured: data.sumInsured || null,
+      sumInsured: data.insuranceType === "Medical / Health"
+        ? (data.medicalMeta?.inpatientLimit || data.sumInsured || null)
+        : (data.sumInsured || null),
       basicRate: data.basicRate || null,
       basicPremium: data.basicPremium || null,
       iraLevy: data.iraLevy || null,
@@ -156,6 +169,7 @@ export async function POST(req: NextRequest) {
       certificateExpiryDate: data.endDate,
       certificateExpiryReason: null,
       notes: data.notes || null,
+      medicalMeta: data.medicalMeta || null,
       status: "Active",
     }).returning();
 

@@ -58,6 +58,8 @@ interface PolicyRow {
     // NEW renewal fields
     renewedByPolicyId?: string | null;
     renewsPolicyId?: string | null;
+    // Medical metadata
+    medicalMeta?: Record<string, any> | null;
   };
   vehicle: {
     id: string;
@@ -235,6 +237,14 @@ function PolicyCard({ row, tab }: { row: PolicyRow; tab: "active" | "pending" | 
             ) : (
               <p style={{ fontSize: "14px", fontWeight: 700, color: "#ffffff", margin: "0 0 2px" }}>
                 {row.policy.insuranceType}
+              </p>
+            )}
+            
+            {/* Medical policy summary */}
+            {row.policy.insuranceType === "Medical / Health" && (row.policy as any).medicalMeta && (
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0" }}>
+                IP Limit: KES {parseFloat((row.policy as any).medicalMeta?.inpatientLimit || "0").toLocaleString("en-KE")}
+                {" · "}{((row.policy as any).medicalMeta?.principalCount || 1) + ((row.policy as any).medicalMeta?.dependantCount || 0)} lives
               </p>
             )}
             

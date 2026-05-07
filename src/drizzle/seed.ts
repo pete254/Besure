@@ -209,6 +209,28 @@ async function seed() {
       applicableTo: "commercial",
       calcConfig: { type: "entertainment", defaultValue: 50000 },
     },
+    // ── MEDICAL ──────────────────────────────────────────────
+    {
+      name: "Maternity Benefit",
+      isActive: true,
+      sortOrder: 1,
+      applicableTo: "medical",
+      calcConfig: { type: "fixed_editable", defaultAmount: 0 },
+    },
+    {
+      name: "Dental Benefit",
+      isActive: true,
+      sortOrder: 2,
+      applicableTo: "medical",
+      calcConfig: { type: "fixed_editable", defaultAmount: 0 },
+    },
+    {
+      name: "Optical Benefit",
+      isActive: true,
+      sortOrder: 3,
+      applicableTo: "medical",
+      calcConfig: { type: "fixed_editable", defaultAmount: 0 },
+    },
   ];
 
   for (const benefit of benefitsToSeed) {

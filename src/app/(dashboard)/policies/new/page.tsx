@@ -63,6 +63,17 @@ interface PolicyData {
     seats: string; chassisNo: string; engineNo: string; regNo: string;
     bodyType: string; colour: string;
   };
+  medicalMeta: {
+    inpatientLimit: string;
+    outpatientLimit: string;
+    principalCount: string;
+    dependantCount: string;
+    hasWaitingPeriod: boolean;
+    waitingPeriodDays: string;
+    maternityEnabled: boolean;
+    dentalEnabled: boolean;
+    opticalEnabled: boolean;
+  };
   coverType: string; sumInsured: string; startDate: string; endDate: string; policyNumber: string;
   basicRate: string; basicPremium: string;
   iraLevy: string;
@@ -82,17 +93,18 @@ const INSURANCE_TYPES = [
   { value: "Motor - Commercial Third Party", label: "Motor — Commercial Third Party", motor: true, group: "commercial_tp" },
   { value: "Fire & Perils", label: "Fire & Perils", motor: false, group: "other" },
   { value: "Domestic Package", label: "Domestic Package", motor: false, group: "other" },
-  { value: "Medical / Health", label: "Medical / Health", motor: false, group: "other" },
+  { value: "Medical / Health", label: "Medical / Health", motor: false, group: "medical" },
   { value: "Life Insurance", label: "Life Insurance", motor: false, group: "other" },
   { value: "Travel Insurance", label: "Travel Insurance", motor: false, group: "other" },
 ];
 
 // Which benefit group applies to each insurance type
-function getBenefitGroup(insuranceType: string): "private" | "commercial" | "none" {
+function getBenefitGroup(insuranceType: string): "private" | "commercial" | "medical" | "none" {
   const found = INSURANCE_TYPES.find(t => t.value === insuranceType);
   if (!found) return "none";
   if (found.group === "private") return "private";
   if (found.group === "commercial") return "commercial";
+  if (found.group === "medical") return "medical";
   // commercial_tp — no benefits for now
   return "none";
 }
@@ -127,6 +139,17 @@ function formatKES(val: string) {
 const emptyPolicy: PolicyData = {
   insuranceType: "", customerId: "", customerName: "", insurerId: "", insurerNameManual: "",
   vehicle: { make: "", model: "", year: "", cc: "", tonnage: "", seats: "", chassisNo: "", engineNo: "", regNo: "", bodyType: "", colour: "" },
+  medicalMeta: {
+    inpatientLimit: "",
+    outpatientLimit: "",
+    principalCount: "1",
+    dependantCount: "0",
+    hasWaitingPeriod: false,
+    waitingPeriodDays: "",
+    maternityEnabled: false,
+    dentalEnabled: false,
+    opticalEnabled: false,
+  },
   coverType: "", sumInsured: "", startDate: "", endDate: "", policyNumber: "",
   basicRate: "", basicPremium: "", iraLevy: "", stampDuty: "40", phcf: "0",
   benefits: [], totalBenefits: "0",
@@ -191,6 +214,7 @@ export default function NewPolicyPage() {
   }, []);
 
   const isMotor = INSURANCE_TYPES.find(t => t.value === data.insuranceType)?.motor ?? false;
+  const isMedical = data.insuranceType === "Medical / Health";
   const benefitGroup = getBenefitGroup(data.insuranceType);
 
   // Filter benefits based on current insurance type group
@@ -346,6 +370,35 @@ export default function NewPolicyPage() {
     }));
   }, [data.basicPremium, data.totalBenefits, data.stampDuty]);
 
+  // Pre-populate medical benefits when entering Step 6
+  useEffect(() => {
+    if (step !== 6 || !isMedical) return;
+    // Pre-select medical benefits based on Step 3 toggles
+    const benefitMap: Record<string, boolean> = {
+      "Maternity Benefit": data.medicalMeta.maternityEnabled,
+      "Dental Benefit": data.medicalMeta.dentalEnabled,
+      "Optical Benefit": data.medicalMeta.opticalEnabled,
+    };
+    setData(prev => {
+      const toAdd = availableBenefits.filter(b => {
+        const shouldInclude = benefitMap[b.name];
+        const alreadyAdded = prev.benefits.find(x => x.benefitOptionId === b.id);
+        return shouldInclude && !alreadyAdded;
+      });
+      const toRemove = prev.benefits.filter(b => {
+        const def = availableBenefits.find(ab => ab.id === b.benefitOptionId);
+        if (!def) return false;
+        return benefitMap[def.name] === false;
+      });
+      if (toAdd.length === 0 && toRemove.length === 0) return prev;
+      const updated = [
+        ...prev.benefits.filter(b => !toRemove.find(r => r.benefitOptionId === b.benefitOptionId)),
+        ...toAdd.map(b => initBenefitEntry(b)),
+      ];
+      return { ...prev, benefits: updated, totalBenefits: recalcTotal(updated) };
+    });
+  }, [step, isMedical, availableBenefits, data.medicalMeta]);
+
   // Auto end date
   useEffect(() => {
     if (data.startDate) {
@@ -459,7 +512,7 @@ export default function NewPolicyPage() {
       if (!data.customerId) errors.customerId = "Please search for and select a customer";
       if (!data.insurerId && !data.insurerNameManual) errors.insurerId = "Please select an insurer or enter one manually";
     }
-    if (currentStep === 3 && isMotor) {
+    if (currentStep === 3 && isMotor && !isMedical) {
       const vehicleErrors = runValidators([
         { field: "make", fn: () => validateRequired(data.vehicle.make, "Make") },
         { field: "model", fn: () => validateRequired(data.vehicle.model, "Model") },
@@ -469,6 +522,17 @@ export default function NewPolicyPage() {
         { field: "engineNo", fn: () => validateRequired(data.vehicle.engineNo, "Engine No.") },
       ]);
       Object.assign(errors, vehicleErrors);
+    }
+    if (currentStep === 3 && isMedical) {
+      if (!data.medicalMeta.inpatientLimit || parseFloat(data.medicalMeta.inpatientLimit) <= 0) {
+        errors.inpatientLimit = "Inpatient cover limit is required";
+      }
+      if (!data.medicalMeta.principalCount || parseInt(data.medicalMeta.principalCount) < 1) {
+        errors.principalCount = "At least 1 principal member is required";
+      }
+      if (data.medicalMeta.hasWaitingPeriod && !data.medicalMeta.waitingPeriodDays) {
+        errors.waitingPeriodDays = "Please enter the waiting period in days";
+      }
     }
     if (currentStep === 4) {
       if (isMotor && !data.coverType) errors.coverType = "Please select a cover type";
@@ -480,8 +544,14 @@ export default function NewPolicyPage() {
         errors.endDate = "End date must be after the start date";
     }
     if (currentStep === 5) {
-      const rateErr = validateRate(data.basicRate);
-      if (rateErr) errors.basicRate = rateErr;
+      if (!isMedical) {
+        const rateErr = validateRate(data.basicRate);
+        if (rateErr) errors.basicRate = rateErr;
+      } else {
+        if (!data.basicPremium || parseFloat(data.basicPremium) <= 0) {
+          errors.basicPremium = "Please enter the net premium amount";
+        }
+      }
     }
     if (currentStep === 8) {
       if (!data.paymentMode) errors.paymentMode = "Please select a payment mode";
@@ -968,11 +1038,129 @@ export default function NewPolicyPage() {
         </div>
       )}
 
-      {/* ── STEP 3: Vehicle ── */}
+      {/* ── STEP 3: Vehicle / Medical ── */}
       {step === 3 && (
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
-          <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>Vehicle Details</p>
-          {!isMotor ? (
+          <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+            {isMedical ? "Medical Cover Details" : "Vehicle Details"}
+          </p>
+          
+          {isMedical ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              {/* Cover Limits */}
+              <div>
+                <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Cover Limits</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                  <div>
+                    <label style={lbStyle}>Inpatient Cover Limit (KES) *</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 1000000"
+                      value={data.medicalMeta.inpatientLimit}
+                      onChange={(e) => setData(prev => ({ ...prev, medicalMeta: { ...prev.medicalMeta, inpatientLimit: e.target.value } }))}
+                      style={inStyle} onFocus={foc} onBlur={blr}
+                    />
+                    {fieldErrors.inpatientLimit && <FieldError message={fieldErrors.inpatientLimit} />}
+                  </div>
+                  <div>
+                    <label style={lbStyle}>Outpatient Cover Limit (KES)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 100000 (optional)"
+                      value={data.medicalMeta.outpatientLimit}
+                      onChange={(e) => setData(prev => ({ ...prev, medicalMeta: { ...prev.medicalMeta, outpatientLimit: e.target.value } }))}
+                      style={inStyle} onFocus={foc} onBlur={blr}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Member Counts */}
+              <div>
+                <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Members Covered</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                  <div>
+                    <label style={lbStyle}>Principal Members *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={data.medicalMeta.principalCount}
+                      onChange={(e) => setData(prev => ({ ...prev, medicalMeta: { ...prev.medicalMeta, principalCount: e.target.value } }))}
+                      style={inStyle} onFocus={foc} onBlur={blr}
+                    />
+                    {fieldErrors.principalCount && <FieldError message={fieldErrors.principalCount} />}
+                  </div>
+                  <div>
+                    <label style={lbStyle}>Dependants</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={data.medicalMeta.dependantCount}
+                      onChange={(e) => setData(prev => ({ ...prev, medicalMeta: { ...prev.medicalMeta, dependantCount: e.target.value } }))}
+                      style={inStyle} onFocus={foc} onBlur={blr}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Waiting Period */}
+              <div>
+                <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Waiting Period</h4>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <input
+                    type="checkbox"
+                    checked={data.medicalMeta.hasWaitingPeriod}
+                    onChange={(e) => setData(prev => ({ ...prev, medicalMeta: { ...prev.medicalMeta, hasWaitingPeriod: e.target.checked, waitingPeriodDays: e.target.checked ? prev.medicalMeta.waitingPeriodDays : "" } }))}
+                    style={{ width: "16px", height: "16px", margin: 0, accentColor: "var(--brand)" }}
+                  />
+                  <label style={{ fontSize: "13px", color: "var(--text-primary)", cursor: "pointer" }}>Waiting Period Applies</label>
+                </div>
+                {data.medicalMeta.hasWaitingPeriod && (
+                  <div>
+                    <label style={lbStyle}>Waiting Period (days) *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 30"
+                      value={data.medicalMeta.waitingPeriodDays}
+                      onChange={(e) => setData(prev => ({ ...prev, medicalMeta: { ...prev.medicalMeta, waitingPeriodDays: e.target.value } }))}
+                      style={{ ...inStyle, maxWidth: "200px" }} onFocus={foc} onBlur={blr}
+                    />
+                    {fieldErrors.waitingPeriodDays && <FieldError message={fieldErrors.waitingPeriodDays} />}
+                  </div>
+                )}
+              </div>
+
+              {/* Optional Benefits toggles */}
+              <div>
+                <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Optional Benefits — amounts entered in next steps
+                </h4>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+                  {[
+                    { key: "maternityEnabled" as const, label: "Maternity", icon: "🤱" },
+                    { key: "dentalEnabled" as const, label: "Dental", icon: "🦷" },
+                    { key: "opticalEnabled" as const, label: "Optical", icon: "👁️" },
+                  ].map(({ key, label, icon }) => (
+                    <div key={key} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px", border: "1px solid var(--border)", borderRadius: "8px", backgroundColor: "var(--bg-app)" }}>
+                      <input
+                        type="checkbox"
+                        checked={data.medicalMeta[key]}
+                        onChange={(e) => setData(prev => ({ ...prev, medicalMeta: { ...prev.medicalMeta, [key]: e.target.checked } }))}
+                        style={{ width: "15px", height: "15px", margin: 0, accentColor: "var(--brand)" }}
+                      />
+                      <span style={{ fontSize: "16px" }}>{icon}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                        {label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : !isMotor ? (
             <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>Vehicle details not required for this type.</p>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
@@ -1053,9 +1241,19 @@ export default function NewPolicyPage() {
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
               <div>
-                <label style={lbStyle}>Vehicle Value / Sum Insured (KES) *</label>
-                <input type="number" placeholder="1500000" value={data.sumInsured}
-                  onChange={(e) => setData(prev => ({ ...prev, sumInsured: e.target.value }))}
+                <label style={lbStyle}>{isMedical ? "Inpatient Cover Limit (KES) *" : "Vehicle Value / Sum Insured (KES) *"}</label>
+                <input type="number" placeholder="1500000" value={isMedical ? data.medicalMeta.inpatientLimit : data.sumInsured}
+                  onChange={(e) => {
+                    if (isMedical) {
+                      setData(prev => ({
+                        ...prev,
+                        medicalMeta: { ...prev.medicalMeta, inpatientLimit: e.target.value },
+                        sumInsured: e.target.value,
+                      }));
+                    } else {
+                      setData(prev => ({ ...prev, sumInsured: e.target.value }));
+                    }
+                  }}
                   style={inStyle} onFocus={foc} onBlur={blr} />
               </div>
               <div>
@@ -1087,14 +1285,37 @@ export default function NewPolicyPage() {
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
           <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>Rate Entry & Premium Calculation</p>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-              <div>
-                <label style={lbStyle}>Basic Premium Rate (%) *</label>
-                <input type="number" step="0.01" placeholder="4.00" value={data.basicRate}
-                  onChange={(e) => setData(prev => ({ ...prev, basicRate: e.target.value }))}
-                  style={inStyle} onFocus={foc} onBlur={blr} />
-                <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>Auto-filled from insurer — editable</p>
+            {isMedical && (
+              <div style={{ backgroundColor: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "8px", padding: "12px", marginBottom: "8px" }}>
+                <p style={{ fontSize: "12px", color: "var(--brand)", fontWeight: 600, margin: 0 }}>
+                  Medical — enter the total premium quoted by the insurer. IRA Levy (0.45%) and Stamp Duty (KES 40) will be added automatically.
+                </p>
               </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              {!isMedical ? (
+                <div>
+                  <label style={lbStyle}>Basic Premium Rate (%) *</label>
+                  <input type="number" step="0.01" placeholder="4.00" value={data.basicRate}
+                    onChange={(e) => setData(prev => ({ ...prev, basicRate: e.target.value }))}
+                    style={inStyle} onFocus={foc} onBlur={blr} />
+                  <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>Auto-filled from insurer — editable</p>
+                </div>
+              ) : (
+                <div>
+                  <label style={lbStyle}>Net Premium (KES) *</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 45000"
+                    value={data.basicPremium}
+                    onChange={(e) => setData(prev => ({ ...prev, basicPremium: e.target.value, basicRate: "" }))}
+                    style={{ ...inStyle, fontSize: "15px", fontWeight: 600, color: "var(--brand)" }}
+                    onFocus={foc} onBlur={blr}
+                  />
+                  <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>Enter the premium as quoted by the insurer — levies calculated automatically</p>
+                  {fieldErrors.basicPremium && <FieldError message={fieldErrors.basicPremium} />}
+                </div>
+              )}
               <div>
                 <label style={lbStyle}>Sum Insured</label>
                 <input value={data.sumInsured ? `KES ${parseFloat(data.sumInsured).toLocaleString()}` : "—"}
@@ -1386,8 +1607,8 @@ export default function NewPolicyPage() {
               return;
             }
             setError("");
-            // Skip vehicle step for non-motor, skip benefits step if no benefits group
-            if (!isMotor && step === 2) { setStep(4); return; }
+            // Skip vehicle step for non-motor AND non-medical, skip benefits step if no benefits group
+            if (!isMotor && !isMedical && step === 2) { setStep(4); return; }
             setStep(s => s + 1);
           }}>
             Next <ArrowRight size={14} />

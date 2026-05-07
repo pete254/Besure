@@ -66,13 +66,15 @@ const INSURANCE_TYPES = [
   { value: "Motor - Commercial Institutional", label: "Motor — Commercial Institutional", group: "commercial" },
   { value: "Motor - Commercial TSV", label: "Motor — Commercial TSV", group: "commercial" },
   { value: "Motor - Commercial Third Party", label: "Motor — Commercial Third Party", group: "commercial" },
+  { value: "Medical / Health", label: "Medical — Health", group: "medical" },
 ];
 
-function getBenefitGroup(insuranceType: string): "private" | "commercial" | "none" {
+function getBenefitGroup(insuranceType: string): "private" | "commercial" | "medical" | "none" {
   const found = INSURANCE_TYPES.find(t => t.value === insuranceType);
   if (!found) return "none";
   if (found.group === "private") return "private";
   if (found.group === "commercial") return "commercial";
+  if (found.group === "medical") return "medical";
   return "none";
 }
 
@@ -155,7 +157,9 @@ export default function CalculatorPage() {
     if (rate) setBasicRate(rate);
   }, [selectedInsurerId, insuranceType, insurers]);
 
-  const canCalculate = parseFloat(sumInsured) > 0 && parseFloat(basicRate) > 0;
+  const canCalculate = insuranceType === "Medical / Health" 
+    ? parseFloat(basicRate) > 0  // For medical, basicRate contains the premium amount
+    : parseFloat(sumInsured) > 0 && parseFloat(basicRate) > 0;
 
   // Build benefits payload for the API (only the amountKes values)
   function buildBenefitsPayload() {
@@ -185,8 +189,9 @@ export default function CalculatorPage() {
         body: JSON.stringify({
           insuranceType,
           insurerId: selectedInsurerId || null,
-          sumInsured: parseFloat(sumInsured),
-          basicRate: parseFloat(basicRate),
+          sumInsured: insuranceType === "Medical / Health" ? 1000000 : parseFloat(sumInsured), // Use dummy sum insured for medical
+          basicRate: insuranceType === "Medical / Health" ? 0 : parseFloat(basicRate), // Pass 0 rate for medical
+          basicPremium: insuranceType === "Medical / Health" ? parseFloat(basicRate) : null, // Pass premium for medical
           benefits: buildBenefitsPayload(),
         }),
       });
@@ -589,9 +594,29 @@ export default function CalculatorPage() {
                 </div>
               )}
               <div>
-                <label style={lbStyle}>Basic Premium Rate (%)</label>
-                <input type="number" step="0.01" value={basicRate} onChange={(e) => setBasicRate(e.target.value)} placeholder="e.g. 4.00" style={inStyle} onFocus={foc} onBlur={blr} />
-                {selectedInsurerId && <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>Auto-filled from insurer — editable</p>}
+                {insuranceType === "Medical / Health" ? (
+                  <>
+                    <label style={lbStyle}>Net Premium (KES)</label>
+                    <input 
+                      type="number" 
+                      value={basicRate} 
+                      onChange={(e) => setBasicRate(e.target.value)} 
+                      placeholder="e.g. 45000" 
+                      style={{ ...inStyle, fontSize: "15px", fontWeight: 600, color: "var(--brand)" }} 
+                      onFocus={foc} 
+                      onBlur={blr} 
+                    />
+                    <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>
+                      Enter the premium as quoted by the insurer — levies calculated automatically
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <label style={lbStyle}>Basic Premium Rate (%)</label>
+                    <input type="number" step="0.01" value={basicRate} onChange={(e) => setBasicRate(e.target.value)} placeholder="e.g. 4.00" style={inStyle} onFocus={foc} onBlur={blr} />
+                    {selectedInsurerId && <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>Auto-filled from insurer — editable</p>}
+                  </>
+                )}
               </div>
             </div>
           </div>

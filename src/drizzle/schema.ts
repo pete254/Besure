@@ -281,6 +281,7 @@ export const policies = pgTable(
     certificateExpiryReason: varchar("certificate_expiry_reason", { length: 255 }),
     renewedByPolicyId: uuid("renewed_by_policy_id").references((): AnyPgColumn => policies.id),
     renewsPolicyId: uuid("renews_policy_id").references((): AnyPgColumn => policies.id),
+    medicalMeta: jsonb("medical_meta"),
     notes: text("notes"),
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: timestamp("created_at").notNull().defaultNow(),

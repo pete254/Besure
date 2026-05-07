@@ -18,10 +18,12 @@ const calcSchema = z.object({
     "Motor - Commercial Institutional",
     "Motor - Commercial TSV",
     "Motor - Commercial Third Party",
+    "Medical / Health",
   ]),
   insurerId: z.string().uuid().optional().nullable(),
   sumInsured: z.number().positive(),
   basicRate: z.number().positive(),
+  basicPremium: z.number().positive().optional().nullable(),
   benefits: z
     .array(
       z.object({
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { insuranceType, insurerId, sumInsured, basicRate, benefits } =
+    const { insuranceType, insurerId, sumInsured, basicRate, basicPremium, benefits } =
       parsed.data;
 
     // Fetch insurer details for minimum premium check
@@ -69,14 +71,23 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Core calculations ──────────────────────────────────────────
-    const calculatedBasicPremium = (sumInsured * basicRate) / 100;
-    const basicPremium = Math.max(calculatedBasicPremium, minPremium);
-    const minimumApplied = calculatedBasicPremium < minPremium && minPremium > 0;
+    const isMedicalType = insuranceType === "Medical / Health";
+
+    // For medical, basicPremium is passed directly (no rate calculation)
+    const calculatedBasicPremium = isMedicalType
+      ? (basicPremium || 0)   // pass-through
+      : (sumInsured * basicRate) / 100;
+    
+    const basicPremiumFinal = isMedicalType
+      ? (basicPremium || 0)   // use passed premium directly
+      : Math.max(calculatedBasicPremium, minPremium);
+    
+    const minimumApplied = !isMedicalType && calculatedBasicPremium < minPremium && minPremium > 0;
 
     const totalBenefits = benefits.reduce((s, b) => s + b.amountKes, 0);
 
     // IRA Levy = 0.45% of (Basic Premium + Total Benefits)
-    const iraLevy = (basicPremium + totalBenefits) * 0.0045;
+    const iraLevy = (basicPremiumFinal + totalBenefits) * 0.0045;
 
     // Fixed statutory charges
     const stampDuty = 40;
@@ -84,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     // Grand Total = Basic Premium + Benefits + IRA Levy + Stamp Duty
     // Training levy REMOVED, PHCF REMOVED
-    const grandTotal = basicPremium + totalBenefits + iraLevy + stampDuty;
+    const grandTotal = basicPremiumFinal + totalBenefits + iraLevy + stampDuty;
 
     // Agency commission (for display only — not charged to client)
     const commissionRate = parseFloat(insurer?.commissionRate || "0");
@@ -92,9 +103,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       sumInsured,
-      basicRate,
+      basicRate: isMedicalType ? null : basicRate,
+      basicPremium: basicPremium || null,
       calculatedBasicPremium: parseFloat(calculatedBasicPremium.toFixed(2)),
-      basicPremium: parseFloat(basicPremium.toFixed(2)),
+      basicPremiumFinal: parseFloat(basicPremiumFinal.toFixed(2)),
       minimumApplied,
       minPremium: minimumApplied ? minPremium : null,
       totalBenefits: parseFloat(totalBenefits.toFixed(2)),
