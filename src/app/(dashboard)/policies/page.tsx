@@ -3,6 +3,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import React from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Search, ChevronRight, FileText, X } from "lucide-react";
@@ -82,9 +83,16 @@ function PolicyCard({ row, tab }: { row: PolicyRow; tab: "active" | "pending" | 
           </div>
           <div>
             <p style={{ fontSize: "14px", fontWeight: 700, color: "#ffffff", margin: "0 0 2px" }}>
-              {row.policy.insuranceType}
+              {row.customer ? (
+                <React.Fragment>
+                  <span style={{ fontWeight: 700 }}>{row.customer.customerType === "Company" ? row.customer.companyName : `${row.customer.firstName} ${row.customer.lastName}`}</span>
+                  {" - "}
+                  {row.policy.insuranceType}
+                </React.Fragment>
+              ) : (
+                row.policy.insuranceType
+              )}
             </p>
-            
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{row.insurer?.name || "—"}</span>
               
