@@ -23,10 +23,10 @@ const drafts = pgTable("drafts", {
 // GET /api/drafts/[id] - fetch a specific draft by ID
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json({ error: "Draft ID required" }, { status: 400 });
@@ -65,10 +65,10 @@ export async function GET(
 // PUT /api/drafts/[id] - update a specific draft by ID
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
 
     if (!id) {
@@ -130,10 +130,10 @@ export async function PUT(
 // DELETE /api/drafts/[id] - delete a specific draft by ID
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json({ error: "Draft ID required" }, { status: 400 });
