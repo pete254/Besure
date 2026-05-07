@@ -106,9 +106,9 @@ async function seed() {
 
     if (existing.length === 0) {
       await db.insert(schema.insurers).values(insurer);
-      console.log(`  ✅ ${insurer.name}`);
+      console.log(`  Created: ${insurer.name}`);
     } else {
-      console.log(`  ⏭️  ${insurer.name} already exists`);
+      console.log(`  Skipped: ${insurer.name} already exists`);
     }
   }
 
@@ -249,10 +249,10 @@ async function seed() {
           updatedAt: new Date(),
         })
         .where(eq(schema.benefitOptions.id, exactMatch.id));
-      console.log(`  ♻️  Updated: ${benefit.name} (${benefit.applicableTo})`);
+      console.log(`  Updated: ${benefit.name} (${benefit.applicableTo})`);
     } else {
       await db.insert(schema.benefitOptions).values(benefit);
-      console.log(`  ✅ Inserted: ${benefit.name} (${benefit.applicableTo})`);
+      console.log(`  Inserted: ${benefit.name} (${benefit.applicableTo})`);
     }
   }
 
@@ -273,13 +273,13 @@ async function seed() {
       role: "admin",
       isActive: true,
     });
-    console.log("  ✅ Admin user created: admin@myloe.co.ke");
-    console.log("  ⚠️  Update password hash before deploying to production!");
+    console.log("  Admin user created: admin@myloe.co.ke");
+    console.log("  Warning: Update password hash before deploying to production!");
   } else {
-    console.log("  ⏭️  Admin user already exists");
+    console.log("  Skipped: Admin user already exists");
   }
 
-  console.log("\n✨ Seed complete.");
+  console.log("\nSeed complete.");
   await pool.end();
 }
 

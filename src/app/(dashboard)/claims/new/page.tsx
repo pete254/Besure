@@ -22,7 +22,7 @@ function FieldErrorLegacy({ message }: { message?: string }) {
   if (!message) return null;
   return (
     <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px", fontWeight: 500 }}>
-      ⚠ {message}
+      Warning: {message}
     </div>
   );
 }

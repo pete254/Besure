@@ -524,7 +524,7 @@ export default function PolicyDetailPage() {
       {policy.insuranceType === "Medical / Health" && policy.medicalMeta && (
         <div className="card">
           <p className="card-title">
-            🏥 Medical Cover Details
+            Medical Cover Details
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
             <Field label="Inpatient Limit" value={formatKES(policy.medicalMeta.inpatientLimit)} />
@@ -543,17 +543,17 @@ export default function PolicyDetailPage() {
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                 {policy.medicalMeta.maternityEnabled && (
                   <span style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 8px", backgroundColor: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "12px", fontSize: "12px", color: "var(--brand)" }}>
-                    🤱 Maternity
+                    Maternity
                   </span>
                 )}
                 {policy.medicalMeta.dentalEnabled && (
                   <span style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 8px", backgroundColor: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "12px", fontSize: "12px", color: "var(--brand)" }}>
-                    🦷 Dental
+                    Dental
                   </span>
                 )}
                 {policy.medicalMeta.opticalEnabled && (
                   <span style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 8px", backgroundColor: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "12px", fontSize: "12px", color: "var(--brand)" }}>
-                    👁️ Optical
+                    Optical
                   </span>
                 )}
               </div>

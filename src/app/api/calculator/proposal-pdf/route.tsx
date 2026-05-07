@@ -534,7 +534,7 @@ function ProposalDocument({ data }: { data: ProposalData }) {
                 <Text style={styles.premiumLabelBold}>Basic Premium</Text>
                 {data.minimumApplied && data.minPremium && (
                   <Text style={{ fontSize: 7, color: "#d97706", marginTop: 2 }}>
-                    ⚠ Minimum premium applied ({fmt(data.minPremium)})
+                    Warning: Minimum premium applied ({fmt(data.minPremium)})
                   </Text>
                 )}
               </View>

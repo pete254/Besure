@@ -360,7 +360,7 @@ export default function PoliciesPage() {
       {policyTab === "pending" && pendingPolicies.length > 0 && (
         <div style={{ marginBottom: "12px", padding: "10px 12px", backgroundColor: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: "8px" }}>
           <p style={{ fontSize: "12px", color: "#60a5fa", margin: 0 }}>
-            <span style={{ display: "inline", marginRight: "4px" }}>📅</span>
+            <span style={{ display: "inline", marginRight: "4px" }}>Calendar:</span>
             These policies have been renewed early and will become active when their start date arrives. The customer has continuous cover.
           </p>
         </div>

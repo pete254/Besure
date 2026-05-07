@@ -1156,10 +1156,10 @@ export default function NewPolicyPage() {
                 </h4>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
                   {[
-                    { key: "maternityEnabled" as const, label: "Maternity", icon: "🤱" },
-                    { key: "dentalEnabled" as const, label: "Dental", icon: "🦷" },
-                    { key: "opticalEnabled" as const, label: "Optical", icon: "👁️" },
-                  ].map(({ key, label, icon }) => (
+                    { key: "maternityEnabled" as const, label: "Maternity" },
+                    { key: "dentalEnabled" as const, label: "Dental" },
+                    { key: "opticalEnabled" as const, label: "Optical" },
+                  ].map(({ key, label }) => (
                     <div key={key} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px", border: "1px solid var(--border)", borderRadius: "8px", backgroundColor: "var(--bg-app)" }}>
                       <input
                         type="checkbox"
@@ -1167,7 +1167,6 @@ export default function NewPolicyPage() {
                         onChange={(e) => setData(prev => ({ ...prev, medicalMeta: { ...prev.medicalMeta, [key]: e.target.checked } }))}
                         style={{ width: "15px", height: "15px", margin: 0, accentColor: "var(--brand)" }}
                       />
-                      <span style={{ fontSize: "16px" }}>{icon}</span>
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
                         {label}
                       </span>
