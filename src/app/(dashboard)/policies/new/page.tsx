@@ -223,6 +223,13 @@ export default function NewPolicyPage() {
       const d = await res.json();
       const { policy, vehicle, benefits, insurer, customer } = d;
       
+      // NEW: Block if already renewed
+      if (policy.renewedByPolicyId) {
+        setError("This policy has already been renewed and cannot be renewed again.");
+        setIsRenewMode(false);
+        return;
+      }
+      
       // Calculate new dates: today → today + 1 year - 1 day
       const today = new Date();
       const startDate = today.toISOString().split("T")[0];

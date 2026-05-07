@@ -36,6 +36,9 @@ interface Policy {
   status: string;
   insurerId?: string | null;
   insurerNameManual?: string | null;
+  // NEW renewal fields
+  renewedByPolicyId?: string | null;
+  renewsPolicyId?: string | null;
 }
 
 interface Vehicle {
@@ -345,6 +348,11 @@ export default function PolicyDetailPage() {
               <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
                 {policy.policyNumber || "Policy — No Number Yet"}
               </h2>
+              {policy.renewsPolicyId && (
+                <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, backgroundColor: "rgba(139,92,246,0.15)", color: "#a78bfa" }}>
+                  Renewal
+                </span>
+              )}
               <span className={`badge ${policy.status === "Active" ? "badge-green" : policy.status === "Expired" ? "badge-red" : "badge-grey"}`}>
                 {policy.status}
               </span>
@@ -362,12 +370,19 @@ export default function PolicyDetailPage() {
           </p>
           <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
             <RiskNoteButton policyId={policy.id} policyNumber={policy.policyNumber} />
-            <Link
-              href={`/policies/new?renewFrom=${policy.id}`}
-              style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--brand)", backgroundColor: "var(--brand-dim)", color: "var(--brand)", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}
-            >
-              <RefreshCw size={12} /> Renew
-            </Link>
+            {!policy.renewedByPolicyId && (
+              <Link
+                href={`/policies/new?renewFrom=${policy.id}`}
+                style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--brand)", backgroundColor: "var(--brand-dim)", color: "var(--brand)", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}
+              >
+                <RefreshCw size={12} /> Renew
+              </Link>
+            )}
+            {policy.renewedByPolicyId && (
+              <span style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", borderRadius: "6px", border: "1px solid rgba(16,185,129,0.3)", backgroundColor: "rgba(16,185,129,0.08)", color: "var(--brand)", fontSize: "12px", fontWeight: 600 }}>
+                <CheckCircle2 size={12} /> Renewed
+              </span>
+            )}
           </div>
         </div>
       </div>

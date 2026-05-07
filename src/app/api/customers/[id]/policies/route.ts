@@ -1,5 +1,4 @@
 // src/app/api/customers/[id]/policies/route.ts
-// Returns all policies (with vehicles) linked to a customer
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";

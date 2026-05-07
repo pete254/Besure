@@ -1,6 +1,4 @@
 // src/app/api/policies/[id]/renew/route.ts
-// Creates a renewal policy based on an existing policy
-
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { policies, vehicles, policyBenefits, payments, policyDocuments } from "@/drizzle/schema";
@@ -27,11 +25,9 @@ const renewSchema = z.object({
     benefitName: z.string(),
     amountKes: z.string(),
   })).optional(),
-  // Documents to carry over (array of existing policyDocument IDs)
   carryOverDocIds: z.array(z.string()).default([]),
 });
 
-// POST /api/policies/[id]/renew
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -49,29 +45,29 @@ export async function POST(
     }
 
     // Fetch the original policy
-    const [original] = await db
-      .select()
-      .from(policies)
-      .where(eq(policies.id, id));
+    const [original] = await db.select().from(policies).where(eq(policies.id, id));
 
     if (!original) {
       return NextResponse.json({ error: "Policy not found" }, { status: 404 });
     }
 
+    // BLOCK: If already renewed, prevent double renewal
+    if (original.renewedByPolicyId) {
+      return NextResponse.json(
+        { error: "This policy has already been renewed and cannot be renewed again." },
+        { status: 409 }
+      );
+    }
+
     const data = parsed.data;
 
-    // Fetch original vehicle and benefits
     const [originalVehicle] = await db
-      .select()
-      .from(vehicles)
-      .where(eq(vehicles.policyId, id));
+      .select().from(vehicles).where(eq(vehicles.policyId, id));
 
     const originalBenefits = await db
-      .select()
-      .from(policyBenefits)
-      .where(eq(policyBenefits.policyId, id));
+      .select().from(policyBenefits).where(eq(policyBenefits.policyId, id));
 
-    // Create the renewal policy (copy most fields, override dates/premium)
+    // Create the renewal policy
     const [renewedPolicy] = await db
       .insert(policies)
       .values({
@@ -98,11 +94,23 @@ export async function POST(
         certificateExpiryDate: data.endDate,
         certificateExpiryReason: null,
         notes: data.notes || `Renewal of policy from ${original.startDate} – ${original.endDate}`,
+        // NEW: The renewal starts as Active (will be "Pending" visually if start date is future)
         status: "Active",
+        // NEW: Link back to the original policy
+        renewsPolicyId: id,
       })
       .returning();
 
-    // Copy vehicle if motor policy
+    // NEW: Mark the original policy as renewed (link forward)
+    await db
+      .update(policies)
+      .set({ 
+        renewedByPolicyId: renewedPolicy.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(policies.id, id));
+
+    // Copy vehicle
     if (originalVehicle) {
       await db.insert(vehicles).values({
         policyId: renewedPolicy.id,
@@ -117,11 +125,10 @@ export async function POST(
         regNo: originalVehicle.regNo,
         bodyType: originalVehicle.bodyType,
         colour: originalVehicle.colour,
-        // Don't copy logbook URL — fresh upload required for renewals
       });
     }
 
-    // Copy benefits (use override if provided)
+    // Copy/override benefits
     const benefitsToInsert = data.benefits || originalBenefits;
     if (benefitsToInsert.length > 0) {
       await db.insert(policyBenefits).values(
@@ -134,24 +141,20 @@ export async function POST(
       );
     }
 
-    // Carry over selected documents by duplicating their records
+    // Carry over documents
     if (data.carryOverDocIds.length > 0) {
       const existingDocs = await db
-        .select()
-        .from(policyDocuments)
-        .where(eq(policyDocuments.policyId, id));
-
+        .select().from(policyDocuments).where(eq(policyDocuments.policyId, id));
       const docsToCarry = existingDocs.filter(d => data.carryOverDocIds.includes(d.id));
-
       if (docsToCarry.length > 0) {
         await db.insert(policyDocuments).values(
           docsToCarry.map(d => ({
-            policyId:     renewedPolicy.id,
-            docType:      d.docType,
-            docLabel:     d.docLabel,
-            status:       d.status,
-            fileUrl:      d.fileUrl,
-            blobKey:      d.blobKey,
+            policyId: renewedPolicy.id,
+            docType: d.docType,
+            docLabel: d.docLabel,
+            status: d.status,
+            fileUrl: d.fileUrl,
+            blobKey: d.blobKey,
             receivedDate: d.receivedDate,
           }))
         );
@@ -190,13 +193,9 @@ export async function POST(
       ]);
     }
 
-    // Mark original policy as Expired if it isn't already
-    if (original.status === "Active") {
-      await db
-        .update(policies)
-        .set({ status: "Expired", updatedAt: new Date() })
-        .where(eq(policies.id, id));
-    }
+    // NOTE: We do NOT mark original as Expired here anymore.
+    // The original stays Active until its end_date passes.
+    // The UI handles "Pending" display logic based on start date vs today.
 
     return NextResponse.json(
       { policy: renewedPolicy, originalPolicyId: id },

@@ -5,6 +5,7 @@
 import {
   pgTable, uuid, text, varchar, integer, numeric,
   boolean, date, timestamp, pgEnum, jsonb, index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -278,6 +279,8 @@ export const policies = pgTable(
     status: policyStatusEnum("status").notNull().default("Pending"),
     certificateExpiryDate: date("certificate_expiry_date"),
     certificateExpiryReason: varchar("certificate_expiry_reason", { length: 255 }),
+    renewedByPolicyId: uuid("renewed_by_policy_id").references((): AnyPgColumn => policies.id),
+    renewsPolicyId: uuid("renews_policy_id").references((): AnyPgColumn => policies.id),
     notes: text("notes"),
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: timestamp("created_at").notNull().defaultNow(),
