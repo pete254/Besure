@@ -7,6 +7,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
+import DraftBanner from "@/components/DraftBanner";
+import { useDraft } from "@/hooks/useDraft";
 import { validateRequired, validateDate } from "@/lib/validation";
 
 interface PolicyOption {
@@ -30,10 +32,12 @@ function FieldErrorLegacy({ message }: { message?: string }) {
 export default function NewClaimPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const draftId = searchParams.get("draft") || "";
   const [policies, setPolicies] = useState<PolicyOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [step, setStep] = useState(1);
 
   const [form, setForm] = useState({
     policyId: searchParams.get("policyId") || "",
@@ -50,9 +54,46 @@ export default function NewClaimPage() {
     notes: "",
   });
 
+  const draftKey = "claim-new";
+  const draftLabel = form.policyId ? `Claim for Policy ${form.policyId}` : "New Claim";
+
+  const {
+    saveDraft, clearDraft, loadDraft,
+    draftSaved, lastSaved, hasDraft, saving: draftSaving
+  } = useDraft("claim", draftKey, form, step, { label: draftLabel });
+
+  const [draftResolved, setDraftResolved] = useState(false);
+
+  // Function to load a specific draft by ID
+  const loadDraftById = async (id: string): Promise<Record<string, any> | null> => {
+    try {
+      const res = await fetch(`/api/drafts/${id}`);
+      if (!res.ok) return null;
+      const result = await res.json();
+      return result.draft?.data || null;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetch("/api/policies").then(r => r.json()).then(d => setPolicies(d.policies || []));
   }, []);
+
+  useEffect(() => {
+    if (draftId) {
+      // Load specific draft by ID
+      loadDraftById(draftId).then(saved => {
+        if (saved) {
+          setForm(saved as typeof form);
+          setDraftResolved(true);
+        }
+      });
+    } else {
+      // Load regular draft by key
+      loadDraft().then(_saved => { /* hasDraft set by hook */ });
+    }
+  }, [draftId]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     const { name, value, type } = e.target;
@@ -162,6 +203,31 @@ export default function NewClaimPage() {
       </Link>
 
       {error && <div style={{ padding: "12px 16px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "13px", marginBottom: "16px" }}>{error}</div>}
+
+      {/* Draft banner */}
+      <div style={{ marginBottom: "16px" }}>
+        <DraftBanner
+          hasDraft={hasDraft}
+          draftResolved={draftResolved}
+          lastSaved={lastSaved}
+          saving={draftSaving}
+          draftSaved={draftSaved}
+          savedStep={null}
+          label={draftLabel}
+          onRestore={async () => {
+            const saved = await loadDraft();
+            if (saved) {
+              setForm(saved as typeof form);
+              setDraftResolved(true);
+            }
+          }}
+          onDismiss={() => setDraftResolved(true)}
+          onDiscard={async () => {
+            await clearDraft();
+            setDraftResolved(true);
+          }}
+        />
+      </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 

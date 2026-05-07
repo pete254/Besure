@@ -161,6 +161,7 @@ export default function NewPolicyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const renewFrom = searchParams.get("renewFrom") || "";
+  const draftId = searchParams.get("draft") || "";
 
   // Add state for renew mode
   const [isRenewMode, setIsRenewMode] = useState(!!renewFrom);
@@ -209,9 +210,32 @@ export default function NewPolicyPage() {
 
   const [draftResolved, setDraftResolved] = useState(false);
 
+  // Function to load a specific draft by ID
+  const loadDraftById = async (id: string): Promise<Record<string, any> | null> => {
+    try {
+      const res = await fetch(`/api/drafts/${id}`);
+      if (!res.ok) return null;
+      const result = await res.json();
+      return result.draft?.data || null;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
-    loadDraft().then(_saved => { /* hasDraft set by hook */ });
-  }, []);
+    if (draftId) {
+      // Load specific draft by ID
+      loadDraftById(draftId).then(saved => {
+        if (saved) {
+          setData(saved as PolicyData);
+          setDraftResolved(true);
+        }
+      });
+    } else {
+      // Load regular draft by key
+      loadDraft().then(_saved => { /* hasDraft set by hook */ });
+    }
+  }, [draftId]);
 
   const isMotor = INSURANCE_TYPES.find(t => t.value === data.insuranceType)?.motor ?? false;
   const isMedical = data.insuranceType === "Medical / Health";
