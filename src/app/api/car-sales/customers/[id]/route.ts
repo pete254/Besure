@@ -5,13 +5,14 @@ import { eq } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const [customer] = await db
       .select()
       .from(carSalesCustomers)
-      .where(eq(carSalesCustomers.id, params.id));
+      .where(eq(carSalesCustomers.id, id));
 
     if (!customer) {
       return NextResponse.json(
@@ -32,9 +33,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { name, phone, email, sourceOfLead } = body;
 
@@ -47,7 +49,7 @@ export async function PUT(
         sourceOfLead: sourceOfLead || null,
         updatedAt: new Date(),
       })
-      .where(eq(carSalesCustomers.id, params.id))
+      .where(eq(carSalesCustomers.id, id))
       .returning();
 
     if (!updatedCustomer) {
@@ -69,12 +71,13 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const [deletedCustomer] = await db
       .delete(carSalesCustomers)
-      .where(eq(carSalesCustomers.id, params.id))
+      .where(eq(carSalesCustomers.id, id))
       .returning();
 
     if (!deletedCustomer) {

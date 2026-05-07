@@ -5,9 +5,10 @@ import { eq } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const notes = await db
       .select({
         id: carSalesNotes.id,
@@ -20,7 +21,7 @@ export async function GET(
       })
       .from(carSalesNotes)
       .leftJoin(users, eq(carSalesNotes.staffId, users.id))
-      .where(eq(carSalesNotes.leadId, params.id))
+      .where(eq(carSalesNotes.leadId, id))
       .orderBy(carSalesNotes.createdAt);
 
     return NextResponse.json(notes);
@@ -35,9 +36,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { notes, staffId } = body;
 
@@ -51,7 +53,7 @@ export async function POST(
     const [newNote] = await db
       .insert(carSalesNotes)
       .values({
-        leadId: params.id,
+        leadId: id,
         notes,
         staffId: staffId || null,
       })

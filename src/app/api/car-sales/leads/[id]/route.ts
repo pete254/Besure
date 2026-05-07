@@ -5,9 +5,10 @@ import { eq } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const [lead] = await db
       .select({
         id: carSalesLeads.id,
@@ -41,7 +42,7 @@ export async function GET(
       })
       .from(carSalesLeads)
       .leftJoin(carSalesCustomers, eq(carSalesLeads.customerId, carSalesCustomers.id))
-      .where(eq(carSalesLeads.id, params.id));
+      .where(eq(carSalesLeads.id, id));
 
     if (!lead) {
       return NextResponse.json(
@@ -62,9 +63,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const {
       stage,
@@ -118,7 +120,7 @@ export async function PUT(
         nextAction: nextAction || undefined,
         updatedAt: new Date(),
       })
-      .where(eq(carSalesLeads.id, params.id))
+      .where(eq(carSalesLeads.id, id))
       .returning();
 
     if (!updatedLead) {
@@ -140,12 +142,13 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const [deletedLead] = await db
       .delete(carSalesLeads)
-      .where(eq(carSalesLeads.id, params.id))
+      .where(eq(carSalesLeads.id, id))
       .returning();
 
     if (!deletedLead) {

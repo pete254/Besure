@@ -5,9 +5,10 @@ import { eq } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const reminders = await db
       .select({
         id: carSalesReminders.id,
@@ -23,7 +24,7 @@ export async function GET(
       })
       .from(carSalesReminders)
       .leftJoin(users, eq(carSalesReminders.staffId, users.id))
-      .where(eq(carSalesReminders.leadId, params.id))
+      .where(eq(carSalesReminders.leadId, id))
       .orderBy(carSalesReminders.reminderDate);
 
     return NextResponse.json(reminders);
@@ -38,9 +39,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { reminderDate, reminderType, notes, staffId } = body;
 
@@ -54,7 +56,7 @@ export async function POST(
     const [newReminder] = await db
       .insert(carSalesReminders)
       .values({
-        leadId: params.id,
+        leadId: id,
         reminderDate,
         reminderType,
         notes: notes || null,
