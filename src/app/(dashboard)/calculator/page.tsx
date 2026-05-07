@@ -42,7 +42,7 @@ interface SelectedBenefit {
 
 interface CalcResult {
   sumInsured: number; basicRate: number;
-  calculatedBasicPremium: number; basicPremium: number;
+  calculatedBasicPremium: number; basicPremium: number; basicPremiumFinal: number;
   minimumApplied: boolean; minPremium: number | null;
   totalBenefits: number;
   iraLevy: number;
@@ -224,7 +224,7 @@ export default function CalculatorPage() {
           vehicleYear: clientInfo.vehicleYear || undefined,
           sumInsured: result.sumInsured,
           basicRate: result.basicRate,
-          basicPremium: result.basicPremium,
+          basicPremium: result.basicPremiumFinal,
           minimumApplied: result.minimumApplied,
           minPremium: result.minPremium,
           benefits: result.benefits,
@@ -621,12 +621,16 @@ export default function CalculatorPage() {
             </div>
           </div>
 
-          {/* Vehicle value */}
+          {/* Vehicle value / Cover Limit */}
           <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "18px" }}>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", marginBottom: "12px", paddingBottom: "8px", borderBottom: "1px solid var(--border)" }}>Vehicle Value</p>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", marginBottom: "12px", paddingBottom: "8px", borderBottom: "1px solid var(--border)" }}>
+              {insuranceType === "Medical / Health" ? "Cover Limit" : "Vehicle Value"}
+            </p>
             <div>
-              <label style={lbStyle}>Sum Insured / Vehicle Value (KES)</label>
-              <input type="number" value={sumInsured} onChange={(e) => setSumInsured(e.target.value)} placeholder="e.g. 1500000" style={{ ...inStyle, fontSize: "15px", fontWeight: 600, color: "var(--brand)" }} onFocus={foc} onBlur={blr} />
+              <label style={lbStyle}>
+                {insuranceType === "Medical / Health" ? "Cover Limit (KES)" : "Sum Insured / Vehicle Value (KES)"}
+              </label>
+              <input type="number" value={sumInsured} onChange={(e) => setSumInsured(e.target.value)} placeholder={insuranceType === "Medical / Health" ? "e.g. 1000000" : "e.g. 1500000"} style={{ ...inStyle, fontSize: "15px", fontWeight: 600, color: "var(--brand)" }} onFocus={foc} onBlur={blr} />
             </div>
             {sumInsured && parseFloat(sumInsured) > 0 && (
               <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "6px" }}>

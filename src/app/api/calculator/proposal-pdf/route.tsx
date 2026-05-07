@@ -491,28 +491,39 @@ function ProposalDocument({ data }: { data: ProposalData }) {
               <Text style={styles.infoLabel}>Proposed Insurer</Text>
               <Text style={styles.infoValue}>{data.insurerName.toUpperCase()}</Text>
             </View>
-            {data.vehicleReg && (
+            {data.insuranceType === "Medical / Health" ? (
               <View style={styles.infoCell}>
-                <Text style={styles.infoLabel}>Vehicle Registration</Text>
-                <Text style={styles.infoValue}>{data.vehicleReg.toUpperCase()}</Text>
+                <Text style={styles.infoLabel}>Cover Limit</Text>
+                <Text style={styles.infoValue}>{fmt(data.sumInsured)}</Text>
+              </View>
+            ) : (
+              <>
+                {data.vehicleReg && (
+                  <View style={styles.infoCell}>
+                    <Text style={styles.infoLabel}>Vehicle Registration</Text>
+                    <Text style={styles.infoValue}>{data.vehicleReg.toUpperCase()}</Text>
+                  </View>
+                )}
+                {data.vehicleMake && (
+                  <View style={styles.infoCell}>
+                    <Text style={styles.infoLabel}>Vehicle</Text>
+                    <Text style={styles.infoValueLight}>
+                      {data.vehicleMake}{data.vehicleYear ? ` (${data.vehicleYear})` : ""}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.infoCell}>
+                  <Text style={styles.infoLabel}>Sum Insured (Vehicle Value)</Text>
+                  <Text style={styles.infoValue}>{fmt(data.sumInsured)}</Text>
+                </View>
+              </>
+            )}
+            {data.basicRate !== null && data.basicRate !== undefined && (
+              <View style={styles.infoCell}>
+                <Text style={styles.infoLabel}>Basic Premium Rate</Text>
+                <Text style={styles.infoValue}>{data.basicRate.toFixed(2)}%</Text>
               </View>
             )}
-            {data.vehicleMake && (
-              <View style={styles.infoCell}>
-                <Text style={styles.infoLabel}>Vehicle</Text>
-                <Text style={styles.infoValueLight}>
-                  {data.vehicleMake}{data.vehicleYear ? ` (${data.vehicleYear})` : ""}
-                </Text>
-              </View>
-            )}
-            <View style={styles.infoCell}>
-              <Text style={styles.infoLabel}>Sum Insured (Vehicle Value)</Text>
-              <Text style={styles.infoValue}>{fmt(data.sumInsured)}</Text>
-            </View>
-            <View style={styles.infoCell}>
-              <Text style={styles.infoLabel}>Basic Premium Rate</Text>
-              <Text style={styles.infoValue}>{data.basicRate.toFixed(2)}%</Text>
-            </View>
           </View>
 
           {/* ── PREMIUM BREAKDOWN ── */}
@@ -651,11 +662,23 @@ function ProposalDocument({ data }: { data: ProposalData }) {
           <View style={styles.noticeBox}>
             <Text style={styles.noticeTitle}>IMPORTANT NOTES</Text>
             <Text style={styles.noticeText}>
-              1. This is a quotation only and does not constitute a binding insurance contract.{"\n"}
-              2. Cover will only commence upon receipt of the full premium or first installment and issuance of a Cover Note.{"\n"}
-              3. The insured value should reflect the current market value of the vehicle. Under-insurance may result in proportional claims settlement.{"\n"}
-              4. Full terms and conditions are as per the policy wording issued by the selected insurer.{"\n"}
-              5. Myloe Insurance Agency is regulated by the Insurance Regulatory Authority (IRA) of Kenya.
+              {data.insuranceType === "Medical / Health" ? (
+                <>
+                  1. This is a quotation only and does not constitute a binding insurance contract.{"\n"}
+                  2. Cover will only commence upon receipt of the full premium or first installment and issuance of a Cover Note.{"\n"}
+                  3. The cover limit should reflect adequate medical coverage for your needs. Please review all benefits and exclusions carefully.{"\n"}
+                  4. Full terms and conditions are as per the policy wording issued by the selected insurer.{"\n"}
+                  5. Myloe Insurance Agency is regulated by the Insurance Regulatory Authority (IRA) of Kenya.
+                </>
+              ) : (
+                <>
+                  1. This is a quotation only and does not constitute a binding insurance contract.{"\n"}
+                  2. Cover will only commence upon receipt of the full premium or first installment and issuance of a Cover Note.{"\n"}
+                  3. The insured value should reflect the current market value of the vehicle. Under-insurance may result in proportional claims settlement.{"\n"}
+                  4. Full terms and conditions are as per the policy wording issued by the selected insurer.{"\n"}
+                  5. Myloe Insurance Agency is regulated by the Insurance Regulatory Authority (IRA) of Kenya.
+                </>
+              )}
             </Text>
           </View>
 
@@ -702,8 +725,8 @@ const proposalSchema = require("zod").z.object({
   vehicleMake: require("zod").z.string().optional().nullable(),
   vehicleYear: require("zod").z.string().optional().nullable(),
   sumInsured: require("zod").z.number(),
-  basicRate: require("zod").z.number(),
-  basicPremium: require("zod").z.number(),
+  basicRate: require("zod").z.number().optional().nullable(),
+  basicPremium: require("zod").z.number().optional().nullable(),
   minimumApplied: require("zod").z.boolean().default(false),
   minPremium: require("zod").z.number().optional().nullable(),
   benefits: require("zod").z.array(require("zod").z.object({
