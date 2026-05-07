@@ -17,6 +17,9 @@ interface PolicyRow {
     endDate: string;
     grandTotal?: string | null;
     status: string;
+    // NEW renewal fields
+    renewedByPolicyId?: string | null;
+    renewsPolicyId?: string | null;
   };
   customer: {
     id: string;
@@ -41,6 +44,135 @@ function daysUntilExpiry(endDate: string) {
   return Math.ceil((new Date(endDate).getTime() - Date.now()) / 86400000);
 }
 
+function daysUntilStart(startDate: string) {
+  return Math.ceil((new Date(startDate).getTime() - Date.now()) / 86400000);
+}
+
+// ── Policy Card Component (reused from customer profile) ──
+function PolicyCard({ row, tab }: { row: PolicyRow; tab: "active" | "pending" | "expired" }) {
+  const today = new Date().toISOString().split("T")[0];
+  const days = daysUntilExpiry(row.policy.endDate);
+  const startDays = daysUntilStart(row.policy.startDate);
+  
+  const isExpired = row.policy.endDate < today;
+  const isPending = row.policy.startDate > today;
+  const isExpiringSoon = !isExpired && !isPending && days <= 90;
+  
+  const isRenewed = !!row.policy.renewedByPolicyId;
+  const isARenewal = !!row.policy.renewsPolicyId;
+
+  const showRenewButton = !isRenewed && (isExpired || (isExpiringSoon && !isPending));
+  const expiryColor = isExpired ? "#f87171" : days <= 7 ? "#fbbf24" : days <= 30 ? "#fb923c" : days <= 90 ? "#fde68a" : "var(--text-muted)";
+
+  return (
+    <div style={{
+      padding: "14px 16px",
+      backgroundColor: "var(--bg-app)",
+      borderRadius: "10px",
+      border: `1px solid ${
+        tab === "pending" ? "rgba(96,165,250,0.3)" :
+        isExpired ? "rgba(239,68,68,0.15)" : 
+        isExpiringSoon ? "rgba(245,158,11,0.2)" : "var(--border)"
+      }`,
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+          <div style={{ width: "38px", height: "38px", borderRadius: "8px", backgroundColor: "var(--brand-dim)", border: "1px solid var(--brand)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <FileText size={16} color="var(--brand)" />
+          </div>
+          <div>
+            <p style={{ fontSize: "14px", fontWeight: 700, color: "#ffffff", margin: "0 0 2px" }}>
+              {row.policy.insuranceType}
+            </p>
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{row.insurer?.name || "—"}</span>
+              
+              {row.policy.coverType && (
+                <span style={{ padding: "1px 7px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, backgroundColor: "rgba(245,158,11,0.15)", color: "#fbbf24" }}>
+                  {row.policy.coverType}
+                </span>
+              )}
+
+              {tab === "pending" && (
+                <span style={{ padding: "1px 7px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, backgroundColor: "rgba(96,165,250,0.15)", color: "#60a5fa" }}>
+                  Pending ({startDays}d until active)
+                </span>
+              )}
+              {tab === "expired" && isRenewed && (
+                <span style={{ padding: "1px 7px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, backgroundColor: "rgba(16,185,129,0.15)", color: "var(--brand)" }}>
+                  ✓ Renewed
+                </span>
+              )}
+              {tab === "expired" && !isRenewed && (
+                <span style={{ padding: "1px 7px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, backgroundColor: "rgba(239,68,68,0.15)", color: "#f87171" }}>
+                  Not Renewed
+                </span>
+              )}
+              {isARenewal && (
+                <span style={{ padding: "1px 7px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, backgroundColor: "rgba(139,92,246,0.15)", color: "#a78bfa" }}>
+                  Renewal
+                </span>
+              )}
+
+              {row.policy.policyNumber && (
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{row.policy.policyNumber}</span>
+              )}
+            </div>
+
+            <div style={{ marginTop: "6px" }}>
+              <span style={{ fontSize: "12px", color: expiryColor }}>
+                <span style={{ display: "inline", marginRight: "3px" }}>
+                  {new Date(row.policy.startDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                  {" → "}
+                  {new Date(row.policy.endDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                </span>
+                {tab === "active" && (
+                  <span style={{ marginLeft: "6px" }}>
+                    ({days <= 0 ? "Expired" : `${days}d left`})
+                  </span>
+                )}
+                {tab === "expired" && (
+                  <span style={{ marginLeft: "6px", color: "#f87171" }}>
+                    (Expired {Math.abs(days)}d ago)
+                  </span>
+                )}
+                {tab === "pending" && (
+                  <span style={{ marginLeft: "6px", color: "#60a5fa" }}>
+                    (Starts in {startDays}d)
+                  </span>
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <p style={{ fontSize: "16px", fontWeight: 700, color: "var(--brand)", margin: "0 0 2px" }}>
+            {formatKES(row.policy.grandTotal)}
+          </p>
+          <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
+            {showRenewButton && (
+              <Link
+                href={`/policies/new?renewFrom=${row.policy.id}`}
+                style={{ display: "flex", alignItems: "center", gap: "4px", padding: "5px 10px", borderRadius: "6px", border: "1px solid var(--brand)", backgroundColor: "var(--brand-dim)", color: "var(--brand)", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}
+              >
+                <Plus size={11} /> Renew
+              </Link>
+            )}
+            <Link
+              href={`/policies/${row.policy.id}`}
+              style={{ display: "flex", alignItems: "center", gap: "4px", padding: "5px 10px", borderRadius: "6px", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}
+            >
+              <ChevronRight size={11} /> View
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const FILTER_LABELS: Record<string, string> = {
   expiring30: "Expiring in 30 days",
   expiring7: "Expiring in 7 days",
@@ -58,6 +190,7 @@ export default function PoliciesPage() {
   const [rows, setRows] = useState<PolicyRow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [policyTab, setPolicyTab] = useState<"active" | "pending" | "expired">("active");
 
   const filterParam = searchParams.get("filter");
   const filterValue = searchParams.get("value");
@@ -75,12 +208,38 @@ export default function PoliciesPage() {
 
   useEffect(() => { fetchPolicies(); }, [fetchPolicies]);
 
-  // Apply filters based on URL params
+  // ── Tab classification logic ──
   const today = new Date().toISOString().split("T")[0];
-  const in7 = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
-  const in30 = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
 
-  let filtered = rows.filter((r) => {
+  const activePolicies = rows.filter(r => {
+    const startDate = r.policy.startDate;
+    const endDate = r.policy.endDate;
+    return startDate <= today && endDate >= today;
+  });
+
+  const pendingPolicies = rows.filter(r => {
+    return r.policy.startDate > today;
+  });
+
+  const expiredPolicies = rows.filter(r => {
+    return r.policy.endDate < today;
+  });
+
+  // Sort policies
+  activePolicies.sort((a, b) => a.policy.endDate.localeCompare(b.policy.endDate));
+  expiredPolicies.sort((a, b) => b.policy.endDate.localeCompare(a.policy.endDate));
+  pendingPolicies.sort((a, b) => a.policy.startDate.localeCompare(b.policy.startDate));
+
+  const TAB_CONFIG = [
+    { key: "active" as const, label: "Active", count: activePolicies.length, color: "var(--brand)" },
+    { key: "pending" as const, label: "Pending", count: pendingPolicies.length, color: "#60a5fa" },
+    { key: "expired" as const, label: "Expired", count: expiredPolicies.length, color: "#9ca3af" },
+  ];
+
+  const currentRows = policyTab === "active" ? activePolicies : policyTab === "pending" ? pendingPolicies : expiredPolicies;
+
+  // Apply search filter to current tab
+  let filtered = currentRows.filter((r) => {
     if (!search) return true;
     const name = r.customer
       ? r.customer.customerType === "Company"
@@ -96,11 +255,11 @@ export default function PoliciesPage() {
     );
   });
 
-  // Apply URL filter
+  // Apply URL filters to current tab
   if (filterParam === "expiring30") {
-    filtered = filtered.filter(r => r.policy.endDate >= today && r.policy.endDate <= in30 && r.policy.status === "Active");
+    filtered = filtered.filter(r => r.policy.endDate >= today && r.policy.endDate <= new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0] && r.policy.status === "Active");
   } else if (filterParam === "expiring7") {
-    filtered = filtered.filter(r => r.policy.endDate >= today && r.policy.endDate <= in7 && r.policy.status === "Active");
+    filtered = filtered.filter(r => r.policy.endDate >= today && r.policy.endDate <= new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0] && r.policy.status === "Active");
   } else if (filterParam === "expired") {
     filtered = filtered.filter(r => r.policy.endDate < today);
   } else if (filterParam === "active") {
@@ -125,7 +284,7 @@ export default function PoliciesPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-          {loading ? "Loading..." : `${filtered.length} of ${rows.length} polic${rows.length !== 1 ? "ies" : "y"}`}
+          {loading ? "Loading..." : `${rows.length} polic${rows.length !== 1 ? "ies" : "y"}`}
         </p>
         <Link
           href="/policies/new"
@@ -136,22 +295,6 @@ export default function PoliciesPage() {
           <Plus size={15} strokeWidth={2.5} /> New Policy
         </Link>
       </div>
-
-      {/* Active filter badge */}
-      {activeFilter && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Filtered by:</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", borderRadius: "20px", backgroundColor: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", fontSize: "12px", fontWeight: 600, color: "var(--brand)" }}>
-            {activeFilter}
-            <button
-              onClick={() => router.push("/policies")}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--brand)", display: "flex", padding: 0 }}
-            >
-              <X size={12} />
-            </button>
-          </span>
-        </div>
-      )}
 
       {/* Search */}
       <div style={{ position: "relative" }}>
@@ -166,79 +309,74 @@ export default function PoliciesPage() {
         />
       </div>
 
-      {/* Table */}
-      <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr 32px", padding: "10px 16px", borderBottom: "1px solid var(--border)", backgroundColor: "var(--bg-sidebar)" }}>
-          {["Customer", "Insurer", "Type", "Cover", "Expiry", "Premium", ""].map((h) => (
-            <span key={h} style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>{h}</span>
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: "0", borderBottom: "1px solid var(--border)", marginBottom: "16px" }}>
+        {TAB_CONFIG.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setPolicyTab(tab.key)}
+            style={{
+              padding: "9px 16px",
+              backgroundColor: "transparent",
+              border: "none",
+              borderBottom: policyTab === tab.key ? `2px solid ${tab.color}` : "2px solid transparent",
+              color: policyTab === tab.key ? tab.color : "var(--text-muted)",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "all 0.15s",
+            }}
+          >
+            {tab.label}
+            {tab.count > 0 && (
+              <span style={{
+                padding: "1px 6px",
+                borderRadius: "20px",
+                fontSize: "11px",
+                fontWeight: 700,
+                backgroundColor: policyTab === tab.key ? `${tab.color}22` : "var(--bg-app)",
+                color: policyTab === tab.key ? tab.color : "var(--text-muted)",
+                border: `1px solid ${policyTab === tab.key ? tab.color : "var(--border)"}`,
+              }}>
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab-specific helper text */}
+      {policyTab === "pending" && pendingPolicies.length > 0 && (
+        <div style={{ marginBottom: "12px", padding: "10px 12px", backgroundColor: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: "8px" }}>
+          <p style={{ fontSize: "12px", color: "#60a5fa", margin: 0 }}>
+            <span style={{ display: "inline", marginRight: "4px" }}>📅</span>
+            These policies have been renewed early and will become active when their start date arrives. The customer has continuous cover.
+          </p>
+        </div>
+      )}
+
+      {/* Policy list */}
+      {filtered.length === 0 ? (
+        <div style={{ padding: "32px 0", textAlign: "center" }}>
+          <p style={{ color: "var(--text-muted)", marginBottom: "12px", fontSize: "14px" }}>
+            {search || filterParam ? "No policies match your filter." : "No policies yet."}
+          </p>
+          {!search && !filterParam && (
+            <Link href="/policies/new" style={{ color: "var(--brand)", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
+              Create your first policy →
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {filtered.map((row) => (
+            <PolicyCard key={row.policy.id} row={row} tab={policyTab} />
           ))}
         </div>
-
-        {loading ? (
-          <div style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)" }}>Loading policies...</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ padding: "48px", textAlign: "center" }}>
-            <p style={{ color: "var(--text-muted)", marginBottom: "12px", fontSize: "14px" }}>
-              {search || filterParam ? "No policies match your filter." : "No policies yet."}
-            </p>
-            {!search && !filterParam && (
-              <Link href="/policies/new" style={{ color: "var(--brand)", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
-                Create your first policy →
-              </Link>
-            )}
-          </div>
-        ) : (
-          filtered.map((r) => {
-            const customerName = r.customer
-              ? r.customer.customerType === "Company"
-                ? r.customer.companyName
-                : `${r.customer.firstName} ${r.customer.lastName}`
-              : "Unknown";
-
-            const days = daysUntilExpiry(r.policy.endDate);
-            const expiryColor = days < 0 ? "#f87171" : days <= 7 ? "#fbbf24" : days <= 30 ? "#fb923c" : "var(--text-secondary)";
-
-            return (
-              <Link
-                key={r.policy.id}
-                href={`/policies/${r.policy.id}`}
-                style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr 32px", padding: "12px 16px", alignItems: "center", textDecoration: "none", borderBottom: "1px solid var(--border)", transition: "background-color 0.1s" }}
-                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
-                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div style={{ width: "30px", height: "30px", borderRadius: "50%", backgroundColor: "var(--brand-dim)", border: "1px solid var(--brand)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <FileText size={13} color="var(--brand)" />
-                  </div>
-                  <div>
-                    <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{customerName}</p>
-                    {r.policy.policyNumber && <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>{r.policy.policyNumber}</p>}
-                  </div>
-                </div>
-                <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{r.insurer?.name || "—"}</span>
-                <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{r.policy.insuranceType.replace("Motor - ", "")}</span>
-                <span>
-                  {r.policy.coverType ? (
-                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, backgroundColor: r.policy.coverType === "Comprehensive" ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.15)", color: r.policy.coverType === "Comprehensive" ? "var(--brand)" : "#fbbf24" }}>
-                      {r.policy.coverType}
-                    </span>
-                  ) : <span style={{ color: "var(--text-muted)" }}>—</span>}
-                </span>
-                <div>
-                  <p style={{ fontSize: "12px", color: expiryColor, margin: 0, fontWeight: 600 }}>
-                    {new Date(r.policy.endDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
-                  </p>
-                  <p style={{ fontSize: "11px", color: expiryColor, margin: 0 }}>
-                    {days < 0 ? "Expired" : days === 0 ? "Today" : `${days}d left`}
-                  </p>
-                </div>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>{formatKES(r.policy.grandTotal)}</span>
-                <ChevronRight size={14} color="var(--text-muted)" />
-              </Link>
-            );
-          })
-        )}
-      </div>
+      )}
     </div>
   );
 }
