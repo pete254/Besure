@@ -12,9 +12,10 @@ export default auth((req) => {
   const isMigrate = req.nextUrl.pathname.startsWith("/api/migrate");
   const isBlobProxy = req.nextUrl.pathname.startsWith("/api/blob");
   const isBlobDebug = req.nextUrl.pathname.startsWith("/api/debug/blob-test");
+  const isDraftsApi = req.nextUrl.pathname.startsWith("/api/drafts");
 
-  // Allow auth routes, cron, migration, blob proxy, and debug endpoints through
-  if (isApiAuth || isCron || isMigrate || isBlobProxy || isBlobDebug) return NextResponse.next();
+  // Allow auth routes, cron, migration, blob proxy, debug, and drafts endpoints through
+  if (isApiAuth || isCron || isMigrate || isBlobProxy || isBlobDebug || isDraftsApi) return NextResponse.next();
 
   // Redirect unauthenticated users to login
   if (!isLoggedIn && !isAuthPage) {
