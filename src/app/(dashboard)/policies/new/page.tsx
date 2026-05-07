@@ -370,6 +370,16 @@ export default function NewPolicyPage() {
     }));
   }, [data.basicPremium, data.totalBenefits, data.stampDuty]);
 
+  // Keep sumInsured in sync with inpatientLimit for medical policies
+  useEffect(() => {
+    if (isMedical && data.medicalMeta.inpatientLimit) {
+      const inpatientLimit = data.medicalMeta.inpatientLimit;
+      if (data.sumInsured !== inpatientLimit) {
+        setData(prev => ({ ...prev, sumInsured: inpatientLimit }));
+      }
+    }
+  }, [isMedical, data.medicalMeta.inpatientLimit]);
+
   // Pre-populate medical benefits when entering Step 6
   useEffect(() => {
     if (step !== 6 || !isMedical) return;
@@ -536,8 +546,11 @@ export default function NewPolicyPage() {
     }
     if (currentStep === 4) {
       if (isMotor && !data.coverType) errors.coverType = "Please select a cover type";
-      const sumErr = validateSumInsured(data.sumInsured);
-      if (sumErr) errors.sumInsured = sumErr;
+      // For medical policies, sumInsured is optional (inpatientLimit is used instead)
+      if (!isMedical) {
+        const sumErr = validateSumInsured(data.sumInsured);
+        if (sumErr) errors.sumInsured = sumErr;
+      }
       if (!data.startDate) errors.startDate = "Policy start date is required";
       if (!data.endDate) errors.endDate = "Policy end date is required";
       if (data.startDate && data.endDate && data.endDate <= data.startDate)
@@ -569,7 +582,9 @@ export default function NewPolicyPage() {
     if (isRenewMode && renewSourceId) {
       // Use the renew endpoint — handles vehicle copy, marks old expired, etc.
       const bens = data.benefits.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0);
-      const basic = (parseFloat(data.sumInsured || "0") * parseFloat(data.basicRate || "0") / 100);
+      const basic = isMedical 
+        ? parseFloat(data.basicPremium || "0")  // Use direct premium for medical
+        : (parseFloat(data.sumInsured || "0") * parseFloat(data.basicRate || "0") / 100);  // Calculate for motor
       const iraLevy = (basic + bens) * 0.0045;
       const grand = (basic + bens + iraLevy + 40).toFixed(2);
       
@@ -591,6 +606,7 @@ export default function NewPolicyPage() {
           paymentMode: data.paymentMode,
           policyNumber: data.policyNumber || null,
           notes: data.notes,
+          medicalMeta: isMedical ? data.medicalMeta : null,
           benefits: data.benefits.map(b => ({
             benefitOptionId: b.benefitOptionId || null,
             benefitName: b.benefitName,
