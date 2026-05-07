@@ -13,6 +13,7 @@ import {
   BarChart3,
   Settings,
   Activity,
+  Car,
 } from "lucide-react";
 
 const navigation = [
@@ -28,6 +29,7 @@ const navigation = [
       { name: "Customers", href: "/customers", icon: Users },
       { name: "Policies",  href: "/policies",  icon: FileText },
       { name: "Claims",    href: "/claims",    icon: AlertTriangle },
+      { name: "Car Sales", href: "/car-sales", icon: Car },
       { name: "Application History", href: "/operations", icon: Activity },
     ],
   },

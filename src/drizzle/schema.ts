@@ -103,6 +103,24 @@ export const notificationStatusEnum = pgEnum("notification_status", [
 export const userRoleEnum = pgEnum("user_role", ["admin", "staff"]);
 
 // ─────────────────────────────────────────────
+// CAR SALES PIPELINE ENUMS
+// ─────────────────────────────────────────────
+
+export const carSalesStageEnum = pgEnum("car_sales_stage", [
+  "New Lead", "Follow Up", "Hot Prospect", "Deposit Paid", "Released", "Lost", "Cancelled",
+]);
+
+export const purchaseTypeEnum = pgEnum("purchase_type", ["Cash", "Bank"]);
+
+export const commissionStatusEnum = pgEnum("commission_status", ["Pending", "Paid"]);
+
+export const kenyaBankEnum = pgEnum("kenya_bank", [
+  "KCB", "Equity Bank", "Cooperative Bank", "NCBA", "Absa", "Standard Chartered", 
+  "Stanbic", "I&M", "Family Bank", "DTB", "SBM", "Kingdom Bank", "Prime Bank", 
+  "Credit Bank", "Gulf African Bank",
+]);
+
+// ─────────────────────────────────────────────
 // USERS
 // ─────────────────────────────────────────────
 
@@ -617,19 +635,156 @@ export type Policy = typeof policies.$inferSelect;
 export type NewPolicy = typeof policies.$inferInsert;
 export type Vehicle = typeof vehicles.$inferSelect;
 export type NewVehicle = typeof vehicles.$inferInsert;
-export type PolicyBenefit = typeof policyBenefits.$inferSelect;
-export type NewPolicyBenefit = typeof policyBenefits.$inferInsert;
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
-export type PolicyTracking = typeof policyTracking.$inferSelect;
-export type PolicyDocument = typeof policyDocuments.$inferSelect;
 export type FollowupNote = typeof followupNotes.$inferSelect;
 export type Garage = typeof garages.$inferSelect;
-export type NewGarage = typeof garages.$inferInsert;
-export type Claim = typeof claims.$inferSelect;
 export type NewClaim = typeof claims.$inferInsert;
 export type ClaimDocument = typeof claimDocuments.$inferSelect;
-export type GarageUpdate = typeof garageUpdates.$inferSelect;
-export type Draft = typeof drafts.$inferSelect;
-export type NewDraft = typeof drafts.$inferInsert;
-export type User = typeof users.$inferSelect;
+// CAR SALES PIPELINE TABLES
+// ─────────────────────────────────────────────
+
+export const carSalesCustomers = pgTable(
+  "car_sales_customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    phone: varchar("phone", { length: 20 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    sourceOfLead: varchar("source_of_lead", { length: 255 }),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    phoneIdx: index("car_sales_customers_phone_idx").on(t.phone),
+  })
+);
+
+export const carSalesCustomersRelations = relations(carSalesCustomers, ({ many }) => ({
+  leads: many(carSalesLeads),
+}));
+
+export const carSalesLeads = pgTable(
+  "car_sales_leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    customerId: uuid("customer_id").notNull().references(() => carSalesCustomers.id, { onDelete: "cascade" }),
+    stage: carSalesStageEnum("stage").notNull().default("New Lead"),
+    
+    // Car Details
+    carType: varchar("car_type", { length: 255 }).notNull(),
+    registrationNumber: varchar("registration_number", { length: 20 }).notNull(),
+    commissionAmount: numeric("commission_amount", { precision: 14, scale: 2 }),
+    
+    // Hot Prospect Stage Fields
+    purchaseType: purchaseTypeEnum("purchase_type"),
+    selectedBank: kenyaBankEnum("kenya_bank"),
+    
+    // Deposit Paid Stage Fields
+    depositAmount: numeric("deposit_amount", { precision: 14, scale: 2 }),
+    paymentDate: date("payment_date"),
+    balanceRemaining: numeric("balance_remaining", { precision: 14, scale: 2 }),
+    reminderDate: date("reminder_date"),
+    
+    // Released Stage Fields
+    releaseDate: date("release_date"),
+    commissionDueDate: date("commission_due_date"),
+    commissionStatus: commissionStatusEnum("commission_status").default("Pending"),
+    finalNotes: text("final_notes"),
+    
+    // Lost/Cancelled Fields
+    lostReason: text("lost_reason"),
+    cancelledReason: text("cancelled_reason"),
+    
+    // Follow Up Stage Fields
+    followUpNotes: text("follow_up_notes"),
+    nextAction: varchar("next_action", { length: 255 }),
+    
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    customerIdx: index("car_sales_leads_customer_idx").on(t.customerId),
+    stageIdx: index("car_sales_leads_stage_idx").on(t.stage),
+    registrationIdx: index("car_sales_leads_registration_idx").on(t.registrationNumber),
+    commissionDueIdx: index("car_sales_leads_commission_due_idx").on(t.commissionDueDate),
+  })
+);
+
+export const carSalesLeadsRelations = relations(carSalesLeads, ({ one, many }) => ({
+  customer: one(carSalesCustomers, {
+    fields: [carSalesLeads.customerId],
+    references: [carSalesCustomers.id],
+  }),
+  notes: many(carSalesNotes),
+  reminders: many(carSalesReminders),
+}));
+
+export const carSalesNotes = pgTable(
+  "car_sales_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    leadId: uuid("lead_id").notNull().references(() => carSalesLeads.id, { onDelete: "cascade" }),
+    notes: text("notes").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    staffId: uuid("staff_id").references(() => users.id),
+  },
+  (t) => ({
+    leadIdx: index("car_sales_notes_lead_idx").on(t.leadId),
+    createdAtIdx: index("car_sales_notes_created_at_idx").on(t.createdAt),
+  })
+);
+
+export const carSalesNotesRelations = relations(carSalesNotes, ({ one }) => ({
+  lead: one(carSalesLeads, {
+    fields: [carSalesNotes.leadId],
+    references: [carSalesLeads.id],
+  }),
+  staff: one(users, {
+    fields: [carSalesNotes.staffId],
+    references: [users.id],
+  }),
+}));
+
+export const carSalesReminders = pgTable(
+  "car_sales_reminders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    leadId: uuid("lead_id").notNull().references(() => carSalesLeads.id, { onDelete: "cascade" }),
+    reminderDate: date("reminder_date").notNull(),
+    reminderType: varchar("reminder_type", { length: 100 }).notNull(),
+    notes: text("notes"),
+    isCompleted: boolean("is_completed").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    staffId: uuid("staff_id").references(() => users.id),
+  },
+  (t) => ({
+    leadIdx: index("car_sales_reminders_lead_idx").on(t.leadId),
+    reminderDateIdx: index("car_sales_reminders_date_idx").on(t.reminderDate),
+    completedIdx: index("car_sales_reminders_completed_idx").on(t.isCompleted),
+  })
+);
+
+export const carSalesRemindersRelations = relations(carSalesReminders, ({ one }) => ({
+  lead: one(carSalesLeads, {
+    fields: [carSalesReminders.leadId],
+    references: [carSalesLeads.id],
+  }),
+  staff: one(users, {
+    fields: [carSalesReminders.staffId],
+    references: [users.id],
+  }),
+}));
+
+// ─────────────────────────────────────────────
+// CAR SALES PIPELINE TYPE EXPORTS
+// ─────────────────────────────────────────────
+
+// Car Sales Pipeline Types
+export type CarSalesCustomer = typeof carSalesCustomers.$inferSelect;
+export type NewCarSalesCustomer = typeof carSalesCustomers.$inferInsert;
+export type CarSalesLead = typeof carSalesLeads.$inferSelect;
+export type NewCarSalesLead = typeof carSalesLeads.$inferInsert;
+export type CarSalesNote = typeof carSalesNotes.$inferSelect;
+export type NewCarSalesNote = typeof carSalesNotes.$inferInsert;
+export type CarSalesReminder = typeof carSalesReminders.$inferSelect;
+export type NewCarSalesReminder = typeof carSalesReminders.$inferInsert;
