@@ -21,9 +21,9 @@ const calcSchema = z.object({
     "Medical / Health",
   ]),
   insurerId: z.string().uuid().optional().nullable(),
-  sumInsured: z.number().positive(),
-  basicRate: z.number().positive(),
-  basicPremium: z.number().positive().optional().nullable(),
+  sumInsured: z.number().min(0),
+  basicRate: z.number().min(0),
+  basicPremium: z.number().min(0).optional().nullable(),
   benefits: z
     .array(
       z.object({
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     // Determine minimum premium for this insurer + type
     let minPremium = 0;
     if (insurer) {
-      if (insuranceType === "Motor - Private")
+      if (insuranceType === "Motor - Private" || insuranceType === "Motor - Private Comp")
         minPremium = parseFloat(insurer.minPremiumPrivate || "0");
       else if (insuranceType === "Motor - Commercial")
         minPremium = parseFloat(insurer.minPremiumCommercial || "0");

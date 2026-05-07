@@ -26,6 +26,7 @@ export const customerDocTypeEnum = pgEnum("customer_doc_type", [
 
 // Updated: renamed Motor - Private → Motor - Private Comp, added 3 new commercial types
 export const insuranceTypeEnum = pgEnum("insurance_type", [
+  "Motor - Private",
   "Motor - Private Comp",
   "Motor - Commercial",
   "Motor - PSV / Matatu",
