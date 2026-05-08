@@ -6,25 +6,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { pgTable, uuid, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { eq, and } from "drizzle-orm";
-
-// ─── Inline drafts table definition ──────────────────────────────────────────
-// Add this table to your schema.ts as well (see instructions below)
-// For now we reference it inline so the API works immediately
-
-const drafts = pgTable("drafts", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  draftType: varchar("draft_type", { length: 50 }).notNull(), // "policy" | "claim"
-  draftKey: varchar("draft_key", { length: 100 }).notNull(),  // e.g. "policy-new" | "policy-{id}-edit"
-  sessionId: varchar("session_id", { length: 100 }),          // optional — browser session or user id
-  data: text("data").notNull(),                                // JSON stringified wizard state
-  step: varchar("step", { length: 10 }),                      // current wizard step
-  label: varchar("label", { length: 255 }),                   // human readable label e.g. "Toyota Harrier — KDA 123A"
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  expiresAt: timestamp("expires_at"),                         // optional auto-expiry
-});
+import { drafts } from "@/drizzle/schema";
 
 const saveDraftSchema = z.object({
   draftType: z.enum(["policy", "claim"]),
@@ -95,7 +78,8 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/drafts error:", error);
-    return NextResponse.json({ error: "Failed to fetch draft" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: `Failed to fetch draft: ${errorMessage}` }, { status: 500 });
   }
 }
 
@@ -173,7 +157,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ draft: { ...newDraft, data } }, { status: 201 });
   } catch (error) {
     console.error("POST /api/drafts error:", error);
-    return NextResponse.json({ error: "Failed to save draft" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: `Failed to save draft: ${errorMessage}` }, { status: 500 });
   }
 }
 
@@ -191,6 +176,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("DELETE /api/drafts error:", error);
-    return NextResponse.json({ error: "Failed to delete draft" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: `Failed to delete draft: ${errorMessage}` }, { status: 500 });
   }
 }

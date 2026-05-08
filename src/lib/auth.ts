@@ -3,6 +3,7 @@
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { compare } from "bcryptjs";
 import { db } from "@/lib/db";
 import { users } from "@/drizzle/schema";
@@ -50,19 +51,57 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      allowDangerousEmailAccountLinking: true,
+    }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
+        token.email = user.email;
       }
+
+      // Store Google refresh token
+      if (account?.provider === "google" && account?.refresh_token) {
+        token.googleRefreshToken = account.refresh_token;
+        token.googleAccessToken = account.access_token;
+
+        // Update user in database
+        if (token.email) {
+          try {
+            const [existingUser] = await db
+              .select()
+              .from(users)
+              .where(eq(users.email, token.email))
+              .limit(1);
+
+            if (existingUser) {
+              await db
+                .update(users)
+                .set({
+                  googleRefreshToken: account.refresh_token,
+                  googleAccessToken: account.access_token,
+                  updatedAt: new Date(),
+                })
+                .where(eq(users.email, token.email));
+            }
+          } catch (error) {
+            console.error("Error storing Google token:", error);
+          }
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string;
         (session.user as any).role = token.role;
+        (session.user as any).googleRefreshToken = token.googleRefreshToken;
       }
       return session;
     },

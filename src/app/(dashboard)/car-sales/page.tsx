@@ -2,11 +2,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Plus, Car, Phone, Mail, DollarSign, Calendar, Building2,
   AlertCircle, ChevronRight, X, Check, MessageSquare,
   Bell, TrendingUp, Loader2, Search, MoreHorizontal,
-  RefreshCw, Edit3, Trash2, AlarmClock, Ban,
+  RefreshCw, Edit3, Trash2, AlarmClock, Ban, Users,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -871,6 +872,106 @@ function LeadCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
   );
 }
 
+// ─── Filtered Details View ────────────────────────────────────────────────────
+
+function FilteredDetailsView({ type, pipeline, onClose, onLeadClick }: { type: string; pipeline: PipelineData; onClose: () => void; onLeadClick: (lead: Lead) => void }) {
+  let leads: Lead[] = [];
+  let title = "";
+  
+  if (type === "active") {
+    title = "Active Pipeline";
+    leads = [
+      ...(pipeline["New Lead"] || []),
+      ...(pipeline["Follow Up"] || []),
+      ...(pipeline["Hot Prospect"] || []),
+      ...(pipeline["Deposit Paid"] || []),
+    ];
+  } else if (type === "released") {
+    title = "Released This Month";
+    const now = new Date();
+    leads = (pipeline["Released"] || []).filter(l => {
+      if (!l.releaseDate) return false;
+      const releaseDate = new Date(l.releaseDate);
+      const year = releaseDate.getFullYear();
+      const month = releaseDate.getMonth();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      return month === currentMonth && year === currentYear;
+    });
+  } else if (type === "commission") {
+    title = "Commission Pending";
+    leads = (pipeline["Released"] || []).filter(l => l.commissionStatus !== "Paid");
+  } else if (type === "lost") {
+    title = "Lost / Cancelled";
+    leads = [...(pipeline["Lost"] || []), ...(pipeline["Cancelled"] || [])];
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}
+          >
+            <ChevronRight size={18} color="var(--text-muted)" style={{ transform: "rotate(180deg)" }} />
+          </button>
+          <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff", margin: 0 }}>{title}</h2>
+          <span style={{ fontSize: "12px", fontWeight: 600, padding: "2px 8px", backgroundColor: "rgba(16,185,129,0.1)", borderRadius: "20px", color: "var(--brand)" }}>{leads.length}</span>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {leads.length === 0 ? (
+          <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)" }}>
+            <p style={{ fontSize: "14px", margin: 0 }}>No leads found</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {leads.map(lead => (
+              <div
+                key={lead.id}
+                onClick={() => onLeadClick(lead)}
+                style={{
+                  padding: "12px 14px",
+                  backgroundColor: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)";
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(16,185,129,0.05)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-card)";
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                    <p style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", margin: 0 }}>{lead.customer.name}</p>
+                    <StageBadge stage={lead.stage} />
+                  </div>
+                  <div style={{ display: "flex", gap: "12px", fontSize: "12px", color: "var(--text-muted)" }}>
+                    <span>{lead.carType}</span>
+                    <span>{lead.registrationNumber}</span>
+                    {lead.commissionAmount && <span>{fmtKES(lead.commissionAmount)}</span>}
+                  </div>
+                </div>
+                <ChevronRight size={16} color="var(--text-muted)" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Stage Column ─────────────────────────────────────────────────────────────
 
 function StageColumn({ stage, leads, onLeadClick }: { stage: string; leads: Lead[]; onLeadClick: (lead: Lead) => void }) {
@@ -907,6 +1008,7 @@ function StageColumn({ stage, leads, onLeadClick }: { stage: string; leads: Lead
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CarSalesPipelinePage() {
+  const router = useRouter();
   const [pipeline, setPipeline] = useState<PipelineData>({});
   const [loading, setLoading] = useState(true);
   const [showNewLead, setShowNewLead] = useState(false);
@@ -914,6 +1016,7 @@ export default function CarSalesPipelinePage() {
   const [search, setSearch] = useState("");
   const [activeStages, setActiveStages] = useState<string[]>(STAGES.filter(s => !["Lost", "Cancelled"].includes(s)));
   const [showAllStages, setShowAllStages] = useState(false);
+  const [viewFilteredDetails, setViewFilteredDetails] = useState<string | null>(null);
 
   const fetchPipeline = useCallback(async () => {
     try {
@@ -933,6 +1036,18 @@ export default function CarSalesPipelinePage() {
 
   for (const stage of displayStages) {
     let leads = pipeline[stage] || [];
+    
+    // Filter: Released cars show for max 3 days, then hidden from main view
+    if (stage === "Released") {
+      const now = new Date();
+      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+      leads = leads.filter(l => {
+        if (!l.releaseDate) return true; // If no date, show it
+        const releaseDate = new Date(l.releaseDate);
+        return releaseDate >= threeDaysAgo;
+      });
+    }
+    
     if (search) {
       const q = search.toLowerCase();
       leads = leads.filter(l =>
@@ -948,12 +1063,19 @@ export default function CarSalesPipelinePage() {
   const totalLeads = Object.values(filteredPipeline).reduce((s, a) => s + a.length, 0);
   const allLeads = Object.values(pipeline).flat();
   const activeLeadsCount = (pipeline["New Lead"] || []).length + (pipeline["Follow Up"] || []).length + (pipeline["Hot Prospect"] || []).length + (pipeline["Deposit Paid"] || []).length;
+  
   const releasedThisMonth = (pipeline["Released"] || []).filter(l => {
     if (!l.releaseDate) return false;
-    const d = new Date(l.releaseDate);
+    const releaseDate = new Date(l.releaseDate);
     const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    // Parse the date properly to avoid timezone issues
+    const year = releaseDate.getFullYear();
+    const month = releaseDate.getMonth();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    return month === currentMonth && year === currentYear;
   }).length;
+  
   const pendingCommission = (pipeline["Released"] || []).filter(l => l.commissionStatus !== "Paid");
   const pendingCommissionTotal = pendingCommission.reduce((s, l) => s + parseFloat(String(l.commissionAmount || 0)), 0);
 
@@ -980,20 +1102,50 @@ export default function CarSalesPipelinePage() {
       </div>
 
       {/* Summary KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", flexShrink: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px", flexShrink: 0 }}>
         {[
-          { label: "Active Pipeline", value: activeLeadsCount, color: "var(--brand)", icon: <TrendingUp size={14} color="var(--brand)" /> },
-          { label: "Released This Month", value: releasedThisMonth, color: "#a78bfa", icon: <Check size={14} color="#a78bfa" /> },
-          { label: "Commission Pending", value: fmtKES(pendingCommissionTotal), color: "#fbbf24", icon: <DollarSign size={14} color="#fbbf24" /> },
-          { label: "Lost / Cancelled", value: ((pipeline["Lost"] || []).length + (pipeline["Cancelled"] || []).length), color: "#9ca3af", icon: <X size={14} color="#9ca3af" /> },
+          { id: "active", label: "Active Pipeline", value: activeLeadsCount, color: "var(--brand)", icon: <TrendingUp size={14} color="var(--brand)" /> },
+          { id: "released", label: "Released This Month", value: releasedThisMonth, color: "#a78bfa", icon: <Check size={14} color="#a78bfa" /> },
+          { id: "commission", label: "Commission Pending", value: fmtKES(pendingCommissionTotal), color: "#fbbf24", icon: <DollarSign size={14} color="#fbbf24" /> },
+          { id: "lost", label: "Lost / Cancelled", value: ((pipeline["Lost"] || []).length + (pipeline["Cancelled"] || []).length), color: "#9ca3af", icon: <X size={14} color="#9ca3af" /> },
+          { id: "customers", label: "Customers", value: "Manage", color: "#06b6d4", icon: <Users size={14} color="#06b6d4" /> },
+          { id: "calendar", label: "Reminders & Calendar", value: "View", color: "#ec4899", icon: <Calendar size={14} color="#ec4899" /> },
         ].map(kpi => (
-          <div key={kpi.label} style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "14px 16px" }}>
+          <button
+            key={kpi.id}
+            onClick={() => {
+              if (kpi.id === "customers") {
+                router.push("/car-sales/customers");
+              } else if (kpi.id === "calendar") {
+                router.push("/car-sales/calendar");
+              } else {
+                setViewFilteredDetails(kpi.id);
+              }
+            }}
+            style={{
+              backgroundColor: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              borderRadius: "10px",
+              padding: "14px 16px",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = kpi.id === "calendar" ? "#ec4899" : (kpi.id === "customers" ? "#06b6d4" : (kpi.id === "active" ? "var(--brand)" : kpi.id === "released" ? "#a78bfa" : kpi.id === "commission" ? "#fbbf24" : "#9ca3af"));
+              (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+              (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
               {kpi.icon}
               <p style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", margin: 0 }}>{kpi.label}</p>
             </div>
             <p style={{ fontSize: "20px", fontWeight: 800, color: kpi.color, margin: 0 }}>{kpi.value}</p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -1015,8 +1167,15 @@ export default function CarSalesPipelinePage() {
         </button>
       </div>
 
-      {/* Pipeline Kanban */}
-      {loading ? (
+      {/* Pipeline Kanban or Filtered Details */}
+      {viewFilteredDetails ? (
+        <FilteredDetailsView
+          type={viewFilteredDetails}
+          pipeline={pipeline}
+          onClose={() => setViewFilteredDetails(null)}
+          onLeadClick={setSelectedLead}
+        />
+      ) : loading ? (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)" }}>
           <Loader2 size={20} style={{ animation: "spin 1s linear infinite", marginRight: "8px" }} /> Loading pipeline...
         </div>

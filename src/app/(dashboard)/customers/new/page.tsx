@@ -12,6 +12,7 @@ import {
   validateEmail,
   validateRequired,
   validateKRAPin,
+  validateCompanyName,
   runValidators,
 } from "@/lib/validation";
 
@@ -164,26 +165,48 @@ export default function NewCustomerPage() {
     const errors = runValidators([
       { field: "firstName", fn: () => validateRequired(form.firstName, "First name") },
       { field: "lastName", fn: () => validateRequired(form.lastName, "Last name") },
-      { field: "phone", fn: () => validatePhone(form.phone) },
-      { field: "email", fn: () => validateEmail(form.email) },
-      { field: "kraPinValue", fn: () => validateKRAPin(form.kraPinValue) },
+      { field: "phone", fn: () => `⚠️ ${validatePhone(form.phone) || ""}`.trim() ? `⚠️ ${validatePhone(form.phone)}` : null },
+      { field: "email", fn: () => form.email ? `⚠️ ${validateEmail(form.email) || ""}`.trim() ? `⚠️ ${validateEmail(form.email)}` : null : null },
+      { field: "kraPinValue", fn: () => form.kraPinValue ? `⚠️ ${validateKRAPin(form.kraPinValue) || ""}`.trim() ? `⚠️ ${validateKRAPin(form.kraPinValue)}` : null : null },
       ...(isCompany
-        ? [{ field: "companyName", fn: () => validateRequired(form.companyName, "Company name") }]
+        ? [{ field: "companyName", fn: () => `⚠️ ${validateCompanyName(form.companyName) || ""}`.trim() ? `⚠️ ${validateCompanyName(form.companyName)}` : null }]
         : []),
     ]);
 
+    // Validate company-specific fields if company type
+    if (isCompany) {
+      if (!form.companyPhone?.trim()) {
+        errors.companyPhone = "⚠️ Company phone is required for company customers";
+      } else if (validatePhone(form.companyPhone)) {
+        errors.companyPhone = `⚠️ ${validatePhone(form.companyPhone)}`;
+      }
+      
+      if (!form.companyEmail?.trim()) {
+        errors.companyEmail = "⚠️ Company email is required for company customers";
+      } else if (validateEmail(form.companyEmail)) {
+        errors.companyEmail = `⚠️ ${validateEmail(form.companyEmail)}`;
+      }
+    }
+
     // Validate directors if company type
+    if (isCompany && directors.length === 0) {
+      errors.directors = "⚠️ At least one director is required for company customers. Click 'Add Director' above.";
+    }
+    
     if (isCompany) {
       directors.forEach((director, idx) => {
         if (!director.name?.trim()) {
-          errors[`director_${idx}_name`] = "Director name is required";
+          errors[`director_${idx}_name`] = `⚠️ Director ${idx + 1} name is required`;
+        }
+        if (!director.idNumberValue?.trim()) {
+          errors[`director_${idx}_id`] = `⚠️ Director ${idx + 1} ID number is required`;
         }
       });
     }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setError("Please fix the errors below and try again.");
+      setError("❌ Please fix all errors below before saving the customer.");
       // Scroll to first error
       setTimeout(() => {
         const firstError = document.querySelector("[data-error='true']");
@@ -212,19 +235,20 @@ export default function NewCustomerPage() {
           const apiErrors: Record<string, string> = {};
           data.issues.forEach((issue: any) => {
             const fieldPath = issue.path?.join(".") || "form";
-            apiErrors[fieldPath] = issue.message || "Invalid value";
+            apiErrors[fieldPath] = `⚠️ ${issue.message || "Invalid value"}`;
           });
           setFieldErrors(apiErrors);
-          setError("Please fix the errors below and try again.");
+          setError("❌ The server found validation errors. Please check and try again.");
         } else {
-          setError(data.error || "Failed to create customer");
+          setError(`❌ ${data.error || "Failed to create customer. Please try again."}`);
         }
         return;
       }
       
       router.push(`/customers/${data.customer.id}`);
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      setError("❌ An unexpected error occurred. Please try again.");
+      console.error("Customer creation error:", err);
     } finally {
       setLoading(false);
     }

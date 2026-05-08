@@ -283,20 +283,61 @@ export default function LoginPage() {
                 )}
               </button>
             </form>
+
+            {/* Divider */}
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "24px 0 16px" }}>
+              <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border)" }} />
+              <span style={{ fontSize: "12px", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Or</span>
+              <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border)" }} />
+            </div>
+
+            {/* Google Sign-in */}
+            <button
+              onClick={() => signIn("google")}
+              style={{
+                width: "100%",
+                padding: "11px 16px",
+                borderRadius: "8px",
+                backgroundColor: "var(--bg-app)",
+                color: "#ffffff",
+                border: "1px solid var(--border)",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--brand)";
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(16,185,129,0.05)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)";
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--bg-app)";
+              }}
+            >
+              <svg style={{ width: "16px", height: "16px" }} viewBox="0 0 24 24">
+                <path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032 c0-3.331,2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.461,2.268,15.365,1.25,12.545,1.25 c-6.135,0-11.116,4.981-11.116,11.115c0,6.135,4.981,11.116,11.116,11.116c3.339,0,6.361-1.449,8.457-3.772l-0.035-0.035 c2.096-2.322,3.414-5.346,3.414-8.811c0-0.36-0.035-0.679-0.102-1.003H12.545z" />
+              </svg>
+              Sign in with Google
+            </button>
+
+            {/* Footer */}
+            <p
+              style={{
+                textAlign: "center",
+                fontSize: "12px",
+                color: "var(--text-muted)",
+                marginTop: "20px",
+              }}
+            >
+              IRA Regulated · Kenya Motor Insurance · © {new Date().getFullYear()} Myloe Insurance Agency
+            </p>
           </div>
         </div>
-
-        {/* Footer */}
-        <p
-          style={{
-            textAlign: "center",
-            fontSize: "12px",
-            color: "var(--text-muted)",
-            marginTop: "20px",
-          }}
-        >
-          IRA Regulated · Kenya Motor Insurance · © {new Date().getFullYear()} Myloe Insurance Agency
-        </p>
       </div>
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

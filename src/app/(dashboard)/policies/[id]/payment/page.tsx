@@ -87,29 +87,38 @@ export default function RecordPaymentPage() {
     // Validate amount paid
     const amt = parseFloat(form.amountPaid);
     if (!form.amountPaid || isNaN(amt) || amt <= 0) {
-      errors.amountPaid = "Enter a valid payment amount greater than KES 0";
+      errors.amountPaid = "⚠️ Enter a valid payment amount greater than KES 0";
     } else if (amt > parseFloat(selectedPayment.amountDue) * 2) {
-      errors.amountPaid = "Amount paid exceeds double the installment amount — please verify";
+      errors.amountPaid = `⚠️ Amount exceeds double the installment (KES ${(parseFloat(selectedPayment.amountDue) * 2).toLocaleString("en-KE", { maximumFractionDigits: 2 })}). Please verify or contact support.`;
     }
 
     // Validate payment date
     if (!form.paidDate) {
-      errors.paidDate = "Payment date is required";
+      errors.paidDate = "⚠️ Payment date is required to record this payment";
     } else {
-      const futureDate = new Date(form.paidDate) > new Date();
-      if (futureDate) {
-        errors.paidDate = "Payment date cannot be in the future";
+      const paidDate = new Date(form.paidDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      paidDate.setHours(0, 0, 0, 0);
+      
+      if (paidDate > today) {
+        errors.paidDate = "⚠️ Payment date cannot be in the future";
       }
     }
 
     // Validate payment method
     if (!form.paymentMethod) {
-      errors.paymentMethod = "Please select a payment method";
+      errors.paymentMethod = "⚠️ Please select a payment method (M-Pesa, Bank Transfer, Cash, etc.)";
+    }
+    
+    // Conditional: if payment method requires reference, validate reference
+    if (form.paymentMethod && ["Bank Transfer", "Cheque", "Card"].includes(form.paymentMethod) && !form.referenceNo?.trim()) {
+      errors.referenceNo = `⚠️ Reference number is required for ${form.paymentMethod} payments`;
     }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setError("Please fix the errors below before continuing.");
+      setError("❌ Please fix all errors below before recording the payment.");
       setTimeout(() => {
         const firstError = document.querySelector("[data-error='true']");
         if (firstError) {
@@ -127,9 +136,12 @@ export default function RecordPaymentPage() {
         body: JSON.stringify({ paymentId: selectedPayment.id, ...form }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Failed to record payment"); return; }
+      if (!res.ok) { 
+        setError(`❌ ${data.error || "Failed to record payment. Please try again."}`); 
+        return; 
+      }
 
-      setSuccess("Payment recorded successfully!");
+      setSuccess("✅ Payment recorded successfully!");
       // Refresh payments
       const refresh = await fetch(`/api/policies/${id}`);
       const refreshed = await refresh.json();
@@ -143,8 +155,9 @@ export default function RecordPaymentPage() {
       } else {
         setSelectedPayment(null);
       }
-    } catch {
-      setError("Something went wrong.");
+    } catch (err) {
+      setError("❌ An unexpected error occurred. Please try again.");
+      console.error("Payment recording error:", err);
     } finally {
       setSaving(false);
     }

@@ -99,8 +99,14 @@ export function useDraft(
         // Reset "saved" indicator after 3 seconds
         setTimeout(() => setDraftSaved(false), 3000);
       } else {
-        const error = await res.json();
-        console.error("useDraft: API error response:", error);
+        let errorMessage = `API error: ${res.status}`;
+        try {
+          const error = await res.json();
+          errorMessage = error.error || errorMessage;
+        } catch (parseError) {
+          console.warn("useDraft: Could not parse error response body");
+        }
+        console.error("useDraft: API error:", errorMessage);
       }
     } catch (e) {
       console.error("useDraft: Draft save failed:", e);

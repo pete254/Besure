@@ -132,6 +132,8 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: userRoleEnum("role").notNull().default("staff"),
   isActive: boolean("is_active").notNull().default(true),
+  googleRefreshToken: text("google_refresh_token"),
+  googleAccessToken: text("google_access_token"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -755,13 +757,16 @@ export const carSalesReminders = pgTable(
     reminderType: varchar("reminder_type", { length: 100 }).notNull(),
     notes: text("notes"),
     isCompleted: boolean("is_completed").notNull().default(false),
+    googleEventId: varchar("google_event_id", { length: 255 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
     staffId: uuid("staff_id").references(() => users.id),
   },
   (t) => ({
     leadIdx: index("car_sales_reminders_lead_idx").on(t.leadId),
     reminderDateIdx: index("car_sales_reminders_date_idx").on(t.reminderDate),
     completedIdx: index("car_sales_reminders_completed_idx").on(t.isCompleted),
+    googleEventIdx: index("car_sales_reminders_google_event_idx").on(t.googleEventId),
   })
 );
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { carSalesLeads, carSalesCustomers } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { buildLeadEvents, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, CarSalesEventInput } from '@/lib/google-calendar';
 
 export async function GET(
   request: NextRequest,
@@ -130,7 +131,46 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json(updatedLead);
+    // Sync to calendar after update
+    let calendarEvents = [];
+    try {
+      // Get customer details for calendar sync
+      const [customer] = await db
+        .select()
+        .from(carSalesCustomers)
+        .where(eq(carSalesCustomers.id, updatedLead.customerId));
+
+      if (customer) {
+        const leadEventData: CarSalesEventInput = {
+          leadId: updatedLead.id,
+          customerName: customer.name,
+          carType: updatedLead.carType,
+          registrationNumber: updatedLead.registrationNumber,
+          stage: updatedLead.stage,
+          reminderDate: updatedLead.reminderDate,
+          releaseDate: updatedLead.releaseDate,
+          commissionDueDate: updatedLead.commissionDueDate,
+          notes: updatedLead.followUpNotes,
+        };
+
+        const events = buildLeadEvents(leadEventData);
+        for (const eventInput of events) {
+          const createdEvent = await createCalendarEvent(eventInput);
+          calendarEvents.push(createdEvent);
+        }
+      }
+    } catch (calendarError) {
+      console.error('Calendar sync failed on update:', calendarError);
+      // Continue even if calendar sync fails
+    }
+
+    return NextResponse.json({ 
+      lead: updatedLead, 
+      calendarEvents,
+      message: calendarEvents.length > 0 
+        ? `Lead updated with ${calendarEvents.length} calendar events` 
+        : 'Lead updated (calendar sync skipped)'
+    });
   } catch (error) {
     console.error('Error updating car sales lead:', error);
     return NextResponse.json(

@@ -111,26 +111,61 @@ export default function NewClaimPage() {
 
     // Validate required fields
     const errors: Record<string, string> = {};
+    
+    // Policy validation
     if (!form.policyId) {
-      errors.policyId = "Please select the policy this claim is linked to";
+      errors.policyId = "⚠️ Please select the policy this claim is linked to. This is required to process the claim.";
     }
+    
+    // Date validation
     const dolErr = validateDate(form.dateOfLoss, "Date of loss");
-    if (dolErr) errors.dateOfLoss = dolErr;
+    if (dolErr) {
+      errors.dateOfLoss = `⚠️ ${dolErr}`;
+    } else {
+      // Check if date is not in the future
+      const lossDate = new Date(form.dateOfLoss);
+      if (lossDate > new Date()) {
+        errors.dateOfLoss = "⚠️ Date of loss cannot be in the future";
+      }
+    }
+    
     const drErr = validateDate(form.dateReported, "Date reported");
-    if (drErr) errors.dateReported = drErr;
+    if (drErr) {
+      errors.dateReported = `⚠️ ${drErr}`;
+    } else {
+      const reportedDate = new Date(form.dateReported);
+      if (reportedDate > new Date()) {
+        errors.dateReported = "⚠️ Date reported cannot be in the future";
+      }
+    }
+    
+    // Cross-field date validation
     if (form.dateOfLoss && form.dateReported && form.dateReported < form.dateOfLoss) {
-      errors.dateReported = "Date reported cannot be before the date of loss";
+      errors.dateReported = "⚠️ Date reported must be on or after the date of loss";
     }
+    
+    // Nature of loss validation
     if (!form.natureOfLoss) {
-      errors.natureOfLoss = "Please select the nature of loss";
+      errors.natureOfLoss = "⚠️ Please select the nature of loss to categorize this claim";
     }
-    if (form.thirdPartyInvolved && !form.thirdPartyName?.trim()) {
-      errors.thirdPartyName = "Please enter the third party's name";
+    
+    // Dependent validation: if third party involved, require name and insurer
+    if (form.thirdPartyInvolved) {
+      if (!form.thirdPartyName?.trim()) {
+        errors.thirdPartyName = "⚠️ Third party name is required when 'third party involved' is checked";
+      }
+      if (!form.thirdPartyInsurer?.trim()) {
+        errors.thirdPartyInsurer = "⚠️ Third party insurer name is required when 'third party involved' is checked";
+      }
+      // Optional: validate third party phone if provided
+      if (form.thirdPartyPhone && !/^[\d\s\+\-\(\)]{7,}$/.test(form.thirdPartyPhone)) {
+        errors.thirdPartyPhone = "⚠️ Enter a valid phone number (or leave blank)";
+      }
     }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setError("Please fix the errors below before continuing.");
+      setError("❌ Please fix all errors above before submitting the claim.");
       setTimeout(() => {
         const firstError = document.querySelector("[data-error='true']");
         if (firstError) {
@@ -175,18 +210,19 @@ export default function NewClaimPage() {
           const apiErrors: Record<string, string> = {};
           data.issues.forEach((issue: any) => {
             const fieldPath = issue.path?.join(".") || "form";
-            apiErrors[fieldPath] = issue.message || "Invalid value";
+            apiErrors[fieldPath] = `⚠️ ${issue.message || "Invalid value"}`;
           });
           setFieldErrors(apiErrors);
-          setError("Please fix the errors below and try again.");
+          setError("❌ The server found validation errors. Please check and try again.");
         } else {
-          setError(data.error || "Failed to create claim");
+          setError(`❌ ${data.error || "Failed to create claim. Please try again."}`);
         }
         return;
       }
       router.push(`/claims/${data.claim.id}`);
-    } catch {
-      setError("Something went wrong.");
+    } catch (err) {
+      setError("❌ An unexpected error occurred. Please try again.");
+      console.error("Claim submission error:", err);
     } finally {
       setLoading(false);
     }

@@ -80,7 +80,136 @@ export function validateRegNo(reg: string): string | null {
   return null;
 }
 
-// Run all validators and return a field-keyed error map
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTENDED VALIDATORS FOR COMPREHENSIVE FORM VALIDATION
+// Based on database schema requirements
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function validateIdNumber(idNumber: string): string | null {
+  if (!idNumber) return null; // Optional in most cases
+  // Kenya ID: 8 digits (old) or 12 digits (new) or passport number
+  if (!/^(\d{8}|\d{12}|[A-Z]{2}\d{7}[A-Z]{1})$/.test(idNumber.replace(/\s/g, "")))
+    return "Enter a valid ID number, Passport, or Alien number";
+  return null;
+}
+
+export function validateIdNumberRequired(idNumber: string, label = "ID number"): string | null {
+  if (!idNumber || !idNumber.trim()) return `${label} is required`;
+  return validateIdNumber(idNumber);
+}
+
+export function validateCompanyName(name: string): string | null {
+  if (!name || !name.trim()) return "Company name is required";
+  if (name.trim().length < 3) return "Company name must be at least 3 characters";
+  return null;
+}
+
+export function validateDateRange(
+  startDate: string,
+  endDate: string,
+  startLabel = "Start date",
+  endLabel = "End date"
+): string | null {
+  if (!startDate || !endDate) return null; // Will be caught by individual date validators
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (end <= start) {
+    return `${endLabel} must be after ${startLabel}`;
+  }
+  return null;
+}
+
+export function validatePastDate(value: string, label: string): string | null {
+  if (!value) return `${label} is required`;
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return `${label} must be a valid date`;
+  if (date > new Date()) {
+    return `${label} cannot be in the future`;
+  }
+  return null;
+}
+
+export function validateFutureDate(value: string, label: string): string | null {
+  if (!value) return `${label} is required`;
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return `${label} must be a valid date`;
+  if (date < new Date()) {
+    return `${label} must be in the future`;
+  }
+  return null;
+}
+
+export function validateAmount(value: string, label: string, minAmount = 0): string | null {
+  if (!value) return `${label} is required`;
+  const n = parseFloat(value);
+  if (isNaN(n) || n < minAmount) {
+    return `${label} must be a valid amount greater than ${minAmount}`;
+  }
+  return null;
+}
+
+export function validatePremium(value: string): string | null {
+  if (!value) return "Premium amount is required";
+  const n = parseFloat(value);
+  if (isNaN(n) || n <= 0) return "Premium must be greater than 0";
+  if (n < 500) return "Premium seems too low — minimum usually KES 500";
+  return null;
+}
+
+export function validateInpatientLimit(value: string): string | null {
+  if (!value) return "Inpatient cover limit is required for medical policies";
+  const n = parseFloat(value);
+  if (isNaN(n) || n <= 0) return "Inpatient limit must be greater than 0";
+  if (n < 100000) return "Inpatient limit seems too low — typical minimum is KES 100,000";
+  return null;
+}
+
+export function validateMemberCount(value: string, label = "Member count"): string | null {
+  if (!value) return `${label} is required`;
+  const n = parseInt(value);
+  if (isNaN(n) || n < 1) return `${label} must be at least 1`;
+  if (n > 500) return `${label} seems too high — please verify`;
+  return null;
+}
+
+export function validateCarType(value: string): string | null {
+  if (!value) return "Car type is required";
+  return null;
+}
+
+export function validateStage(value: string, allowedStages: string[]): string | null {
+  if (!value) return "Stage is required";
+  if (!allowedStages.includes(value)) return "Please select a valid stage";
+  return null;
+}
+
+export function validateNatureOfLoss(value: string): string | null {
+  if (!value) return "Nature of loss is required";
+  const valid = ["Accident", "Theft", "Fire", "Flood", "Vandalism", "Other"];
+  if (!valid.includes(value)) return "Please select a valid nature of loss";
+  return null;
+}
+
+export function validateCommissionAmount(value: string): string | null {
+  if (!value) return null; // Optional
+  const n = parseFloat(value);
+  if (isNaN(n) || n < 0) return "Commission must be a valid positive amount or 0";
+  return null;
+}
+
+export function validateDependentFields(
+  parentValue: boolean,
+  fieldValue: string,
+  fieldLabel: string
+): string | null {
+  if (parentValue && (!fieldValue || !fieldValue.trim())) {
+    return `${fieldLabel} is required when parent option is selected`;
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER: Run all validators and return a field-keyed error map
 export function runValidators(
   validators: { field: string; fn: () => string | null }[]
 ): Record<string, string> {

@@ -77,6 +77,59 @@ const createPolicySchema = z.object({
     blobKey: z.string(),
     docLabel: z.string(),
   })).default([]),
+}).superRefine((data, ctx) => {
+  const isMedical = data.insuranceType === "Medical / Health";
+  const isMotor = MOTOR_TYPES.includes(data.insuranceType);
+  
+  // Vehicle validation ONLY for motor types
+  if (isMotor && data.vehicle) {
+    if (!data.vehicle.make) {
+      ctx.addIssue({ 
+        code: z.ZodIssueCode.custom, 
+        message: "Make is required", 
+        path: ["vehicle", "make"] 
+      });
+    }
+    if (!data.vehicle.regNo) {
+      ctx.addIssue({ 
+        code: z.ZodIssueCode.custom, 
+        message: "Reg No is required", 
+        path: ["vehicle", "regNo"] 
+      });
+    }
+    if (!data.vehicle.chassisNo) {
+      ctx.addIssue({ 
+        code: z.ZodIssueCode.custom, 
+        message: "Chassis No is required", 
+        path: ["vehicle", "chassisNo"] 
+      });
+    }
+    if (!data.vehicle.engineNo) {
+      ctx.addIssue({ 
+        code: z.ZodIssueCode.custom, 
+        message: "Engine No is required", 
+        path: ["vehicle", "engineNo"] 
+      });
+    }
+  }
+  
+  // Medical validation ONLY for medical types
+  if (isMedical) {
+    if (!data.medicalMeta?.inpatientLimit || parseFloat(data.medicalMeta.inpatientLimit as string) <= 0) {
+      ctx.addIssue({ 
+        code: z.ZodIssueCode.custom, 
+        message: "Inpatient limit is required and must be greater than 0", 
+        path: ["medicalMeta", "inpatientLimit"] 
+      });
+    }
+    if (!data.basicPremium || parseFloat(data.basicPremium as string) <= 0) {
+      ctx.addIssue({ 
+        code: z.ZodIssueCode.custom, 
+        message: "Net premium is required for medical policies", 
+        path: ["basicPremium"] 
+      });
+    }
+  }
 });
 
 // Which insurance types count as "motor"
@@ -148,8 +201,6 @@ export async function POST(req: NextRequest) {
             field: issue.path.join('.'),
             message: issue.message,
             code: issue.code,
-            expected: issue.expected,
-            received: issue.received
           }))
         },
         { status: 400 }
@@ -192,20 +243,21 @@ export async function POST(req: NextRequest) {
 
     // Create vehicle record if motor
     if (isMotor && data.vehicle) {
-      await db.insert(vehicles).values({
+      const vehicleData = {
         policyId: newPolicy.id,
-        make: data.vehicle.make,
-        model: data.vehicle.model,
-        year: data.vehicle.year,
+        make: data.vehicle.make || "",
+        model: data.vehicle.model || "",
+        year: data.vehicle.year || new Date().getFullYear(),
         cc: data.vehicle.cc || null,
         tonnage: data.vehicle.tonnage || null,
         seats: data.vehicle.seats || null,
-        chassisNo: data.vehicle.chassisNo,
-        engineNo: data.vehicle.engineNo,
-        regNo: data.vehicle.regNo,
-        bodyType: data.vehicle.bodyType as any || null,
+        chassisNo: data.vehicle.chassisNo || "",
+        engineNo: data.vehicle.engineNo || "",
+        regNo: data.vehicle.regNo || "",
+        bodyType: data.vehicle.bodyType || null,
         colour: data.vehicle.colour || null,
-      });
+      };
+      await db.insert(vehicles).values(vehicleData as any);
     }
 
     // Create policy benefits

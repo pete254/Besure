@@ -361,15 +361,45 @@ export default function NewPolicyPage() {
     }
   }, [data.insuranceType]);
 
-  // Auto-calculate basic premium
+  // Fix 4: Reset vehicle/medical data when insurance type switches
   useEffect(() => {
+    if (isMedical) {
+      // Clear vehicle data when switching to medical
+      setData(prev => ({
+        ...prev,
+        vehicle: {
+          make: "", model: "", year: "", cc: "", tonnage: "",
+          seats: "", chassisNo: "", engineNo: "", regNo: "",
+          bodyType: "", colour: ""
+        },
+        coverType: "medical", // Auto-set
+        sumInsured: prev.medicalMeta.inpatientLimit || "", // Sync from medical meta
+      }));
+    } else if (isMotor) {
+      // Clear medical meta when switching to motor
+      setData(prev => ({
+        ...prev,
+        coverType: "", // Reset so user picks Comprehensive/TPO/TPFT
+        medicalMeta: {
+          inpatientLimit: "", outpatientLimit: "",
+          principalCount: "1", dependantCount: "0",
+          hasWaitingPeriod: false, waitingPeriodDays: "",
+          maternityEnabled: false, dentalEnabled: false, opticalEnabled: false,
+        }
+      }));
+    }
+  }, [data.insuranceType, isMotor, isMedical]);
+
+  // Fix 6: Auto-calculate basic premium for motor only (not for medical)
+  useEffect(() => {
+    if (isMedical) return; // Don't override medical's manually-entered premium
     const sum = parseFloat(data.sumInsured || "0");
     const rate = parseFloat(data.basicRate || "0");
     if (sum > 0 && rate > 0) {
       const basic = (sum * rate / 100).toFixed(2);
       setData(prev => ({ ...prev, basicPremium: basic }));
     }
-  }, [data.sumInsured, data.basicRate]);
+  }, [data.sumInsured, data.basicRate, isMedical]);
 
   // Recalculate percentage-based benefits when sum insured changes
   useEffect(() => {
@@ -550,61 +580,99 @@ export default function NewPolicyPage() {
 
   function validateStep(currentStep: number): Record<string, string> {
     const errors: Record<string, string> = {};
+
     if (currentStep === 1) {
-      if (!data.insuranceType) errors.insuranceType = "Please select an insurance type to continue";
+      if (!data.insuranceType) errors.insuranceType = "⚠️ Please select an insurance type to continue";
     }
+
     if (currentStep === 2) {
-      if (!data.customerId) errors.customerId = "Please search for and select a customer";
-      if (!data.insurerId && !data.insurerNameManual) errors.insurerId = "Please select an insurer or enter one manually";
+      if (!data.customerId) errors.customerId = "⚠️ Please search for and select a customer";
+      if (!data.insurerId && !data.insurerNameManual) errors.insurerId = "⚠️ Please select an insurer or enter one manually";
     }
-    if (currentStep === 3 && isMotor && !isMedical) {
-      const vehicleErrors = runValidators([
-        { field: "make", fn: () => validateRequired(data.vehicle.make, "Make") },
-        { field: "model", fn: () => validateRequired(data.vehicle.model, "Model") },
-        { field: "year", fn: () => validateYear(data.vehicle.year) },
-        { field: "regNo", fn: () => validateRegNo(data.vehicle.regNo) },
-        { field: "chassisNo", fn: () => validateRequired(data.vehicle.chassisNo, "Chassis No.") },
-        { field: "engineNo", fn: () => validateRequired(data.vehicle.engineNo, "Engine No.") },
-      ]);
-      Object.assign(errors, vehicleErrors);
-    }
-    if (currentStep === 3 && isMedical) {
-      if (!data.medicalMeta.inpatientLimit || parseFloat(data.medicalMeta.inpatientLimit) <= 0) {
-        errors.inpatientLimit = "Inpatient cover limit is required";
+
+    if (currentStep === 3) {
+      if (isMotor && !isMedical) {
+        // Vehicle validation ONLY for motor
+        const vehicleErrors = runValidators([
+          { field: "make", fn: () => {
+            const err = validateRequired(data.vehicle.make, "Make");
+            return err ? `⚠️ ${err}` : null;
+          }},
+          { field: "model", fn: () => {
+            const err = validateRequired(data.vehicle.model, "Model");
+            return err ? `⚠️ ${err}` : null;
+          }},
+          { field: "year", fn: () => {
+            const err = validateYear(data.vehicle.year);
+            return err ? `⚠️ ${err}` : null;
+          }},
+          { field: "regNo", fn: () => {
+            const err = validateRegNo(data.vehicle.regNo);
+            return err ? `⚠️ ${err}` : null;
+          }},
+          { field: "chassisNo", fn: () => {
+            const err = validateRequired(data.vehicle.chassisNo, "Chassis No.");
+            return err ? `⚠️ ${err}` : null;
+          }},
+          { field: "engineNo", fn: () => {
+            const err = validateRequired(data.vehicle.engineNo, "Engine No.");
+            return err ? `⚠️ ${err}` : null;
+          }},
+        ]);
+        Object.assign(errors, vehicleErrors);
       }
-      if (!data.medicalMeta.principalCount || parseInt(data.medicalMeta.principalCount) < 1) {
-        errors.principalCount = "At least 1 principal member is required";
-      }
-      if (data.medicalMeta.hasWaitingPeriod && !data.medicalMeta.waitingPeriodDays) {
-        errors.waitingPeriodDays = "Please enter the waiting period in days";
-      }
-    }
-    if (currentStep === 4) {
-      if (isMotor && !data.coverType) errors.coverType = "Please select a cover type";
-      // For medical policies, sumInsured is optional (inpatientLimit is used instead)
-      if (!isMedical) {
-        const sumErr = validateSumInsured(data.sumInsured);
-        if (sumErr) errors.sumInsured = sumErr;
-      }
-      if (!data.startDate) errors.startDate = "Policy start date is required";
-      if (!data.endDate) errors.endDate = "Policy end date is required";
-      if (data.startDate && data.endDate && data.endDate <= data.startDate)
-        errors.endDate = "End date must be after the start date";
-    }
-    if (currentStep === 5) {
-      if (!isMedical) {
-        const rateErr = validateRate(data.basicRate);
-        if (rateErr) errors.basicRate = rateErr;
-      } else {
-        if (!data.basicPremium || parseFloat(data.basicPremium) <= 0) {
-          errors.basicPremium = "Please enter the net premium amount";
+
+      if (isMedical) {
+        // Medical validation ONLY
+        if (!data.medicalMeta.inpatientLimit || parseFloat(data.medicalMeta.inpatientLimit) <= 0) {
+          errors.inpatientLimit = "⚠️ Inpatient cover limit is required (minimum KES 100,000 recommended)";
+        }
+        if (!data.medicalMeta.principalCount || parseInt(data.medicalMeta.principalCount) < 1) {
+          errors.principalCount = "⚠️ At least 1 principal member is required";
+        }
+        if (data.medicalMeta.hasWaitingPeriod && !data.medicalMeta.waitingPeriodDays) {
+          errors.waitingPeriodDays = "⚠️ Please enter the waiting period in days (e.g., 30 days)";
         }
       }
     }
-    if (currentStep === 8) {
-      if (!data.paymentMode) errors.paymentMode = "Please select a payment mode";
-      if (data.paymentMode === "IPF" && !data.ipfProvider) errors.ipfProvider = "IPF provider name is required";
+
+    if (currentStep === 4) {
+      if (isMotor && !isMedical) {
+        // Cover type only needed for motor
+        if (!data.coverType) errors.coverType = "⚠️ Please select a cover type (Comprehensive, Third Party, etc.)";
+        const sumErr = validateSumInsured(data.sumInsured);
+        if (sumErr) errors.sumInsured = `⚠️ ${sumErr}`;
+      }
+      
+      if (isMedical) {
+        // For medical, sum insured comes from inpatientLimit — already validated in step 3
+        // Just validate dates
+      }
+      
+      if (!data.startDate) errors.startDate = "⚠️ Policy start date is required";
+      if (!data.endDate) errors.endDate = "⚠️ Policy end date is required";
+      if (data.startDate && data.endDate && data.endDate <= data.startDate)
+        errors.endDate = "⚠️ End date must be after the start date";
     }
+
+    if (currentStep === 5) {
+      if (isMedical) {
+        // Medical: validate basicPremium directly (no rate calculation)
+        if (!data.basicPremium || parseFloat(data.basicPremium) <= 0) {
+          errors.basicPremium = "⚠️ Net premium amount is required (enter the quoted premium)";
+        }
+      } else {
+        // Motor: validate rate
+        const rateErr = validateRate(data.basicRate);
+        if (rateErr) errors.basicRate = `⚠️ ${rateErr}`;
+      }
+    }
+
+    if (currentStep === 8) {
+      if (!data.paymentMode) errors.paymentMode = "⚠️ Please select a payment mode";
+      if (data.paymentMode === "IPF" && !data.ipfProvider) errors.ipfProvider = "⚠️ IPF provider name is required when IPF is selected";
+    }
+
     return errors;
   }
 
@@ -663,7 +731,8 @@ export default function NewPolicyPage() {
       const payload = {
         ...data,
         trainingLevy: "0",
-        vehicle: isMotor ? {
+        // CRITICAL: Pass null vehicle for medical, data for motor
+        vehicle: (isMotor && !isMedical) ? {
           ...data.vehicle,
           year: parseInt(data.vehicle.year),
           cc: data.vehicle.cc ? parseInt(data.vehicle.cc) : null,
@@ -671,13 +740,20 @@ export default function NewPolicyPage() {
         } : null,
         insurerId: data.insurerId || null,
         insurerNameManual: !data.insurerId ? data.insurerNameManual : null,
-        // Convert medicalMeta string fields to numbers for API validation
+        // CRITICAL: Only pass medicalMeta for medical policies
         medicalMeta: isMedical ? {
           ...data.medicalMeta,
-          principalCount: data.medicalMeta.principalCount ? parseInt(data.medicalMeta.principalCount) : null,
-          dependantCount: data.medicalMeta.dependantCount ? parseInt(data.medicalMeta.dependantCount) : null,
-          waitingPeriodDays: data.medicalMeta.waitingPeriodDays ? parseInt(data.medicalMeta.waitingPeriodDays) : null,
+          principalCount: parseInt(data.medicalMeta.principalCount) || 1,
+          dependantCount: parseInt(data.medicalMeta.dependantCount) || 0,
+          waitingPeriodDays: data.medicalMeta.waitingPeriodDays 
+            ? parseInt(data.medicalMeta.waitingPeriodDays) 
+            : null,
         } : null,
+        // For medical, use basicPremium directly (not calculated from rate)
+        basicRate: isMedical ? null : data.basicRate,
+        basicPremium: isMedical 
+          ? data.basicPremium 
+          : (parseFloat(data.sumInsured) * parseFloat(data.basicRate) / 100).toFixed(2),
         documents: [],
       };
       console.log("Sending payload to API:", JSON.stringify(payload, null, 2));
@@ -1312,18 +1388,33 @@ export default function NewPolicyPage() {
                 { key: "engineNo", label: "Engine No. *", placeholder: "Engine number" },
                 { key: "colour", label: "Colour", placeholder: "Silver" },
               ].map(({ key, label, placeholder }) => (
-                <div key={key}>
+                <div key={key} data-error={!!fieldErrors[key] || undefined}>
                   <label style={lbStyle}>{label}</label>
                   <input placeholder={placeholder} value={(data.vehicle as Record<string, string>)[key]}
-                    onChange={(e) => setData(prev => ({ ...prev, vehicle: { ...prev.vehicle, [key]: e.target.value } }))}
-                    style={inStyle} onFocus={foc} onBlur={blr} />
+                    onChange={(e) => {
+                      setData(prev => ({ ...prev, vehicle: { ...prev.vehicle, [key]: e.target.value } }));
+                      if (fieldErrors[key]) {
+                        setFieldErrors(prev => ({ ...prev, [key]: "" }));
+                      }
+                    }}
+                    style={{ ...inStyle, borderColor: fieldErrors[key] ? "#f87171" : undefined }} 
+                    onFocus={foc} 
+                    onBlur={blr} />
+                  {fieldErrors[key] && <FieldError message={fieldErrors[key]} />}
                 </div>
               ))}
-              <div>
+              <div data-error={!!fieldErrors.year || undefined}>
                 <label style={lbStyle}>Year of Manufacture *</label>
                 <input type="number" placeholder="2020" value={data.vehicle.year}
-                  onChange={(e) => setData(prev => ({ ...prev, vehicle: { ...prev.vehicle, year: e.target.value } }))}
-                  style={inStyle} onFocus={foc} onBlur={blr} />
+                  onChange={(e) => {
+                    setData(prev => ({ ...prev, vehicle: { ...prev.vehicle, year: e.target.value } }));
+                    if (fieldErrors.year) {
+                      setFieldErrors(prev => ({ ...prev, year: "" }));
+                    }
+                  }}
+                  style={{ ...inStyle, borderColor: fieldErrors.year ? "#f87171" : undefined }}
+                  onFocus={foc} onBlur={blr} />
+                {fieldErrors.year && <FieldError message={fieldErrors.year} />}
               </div>
               <div>
                 <label style={lbStyle}>Body Type</label>
@@ -1754,7 +1845,23 @@ export default function NewPolicyPage() {
             const errors = validateStep(step);
             if (Object.keys(errors).length > 0) {
               setFieldErrors(errors);
-              setError("Please fix the errors above before continuing.");
+              const fieldList = Object.keys(errors).map(k => {
+                const labels: Record<string, string> = {
+                  insuranceType: "Insurance Type",
+                  customerId: "Customer",
+                  insurerId: "Insurer",
+                  make: "Make", model: "Model", year: "Year", regNo: "Registration No.",
+                  chassisNo: "Chassis No.", engineNo: "Engine No.",
+                  inpatientLimit: "Inpatient Limit", principalCount: "Principal Members",
+                  waitingPeriodDays: "Waiting Period",
+                  coverType: "Cover Type", sumInsured: "Sum Insured",
+                  startDate: "Start Date", endDate: "End Date",
+                  basicRate: "Premium Rate", basicPremium: "Net Premium",
+                  paymentMode: "Payment Mode", ipfProvider: "IPF Provider",
+                };
+                return labels[k] || k;
+              });
+              setError(`❌ Please fix: ${fieldList.join(", ")}`);
               return;
             }
             setError("");

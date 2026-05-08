@@ -13,9 +13,12 @@ export default auth((req) => {
   const isBlobProxy = req.nextUrl.pathname.startsWith("/api/blob");
   const isBlobDebug = req.nextUrl.pathname.startsWith("/api/debug/blob-test");
   const isDraftsApi = req.nextUrl.pathname.startsWith("/api/drafts");
+  const isCalendarTest = req.nextUrl.pathname.startsWith("/api/calendar/test");
+  const isCalendarApi = req.nextUrl.pathname.startsWith("/api/calendar");
+  const isCarSalesApi = req.nextUrl.pathname.startsWith("/api/car-sales");
 
-  // Allow auth routes, cron, migration, blob proxy, debug, and drafts endpoints through
-  if (isApiAuth || isCron || isMigrate || isBlobProxy || isBlobDebug || isDraftsApi) return NextResponse.next();
+  // Allow auth routes, cron, migration, blob proxy, debug, drafts, calendar, and car sales endpoints through
+  if (isApiAuth || isCron || isMigrate || isBlobProxy || isBlobDebug || isDraftsApi || isCalendarApi || isCarSalesApi) return NextResponse.next();
 
   // Redirect unauthenticated users to login
   if (!isLoggedIn && !isAuthPage) {

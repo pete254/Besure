@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { carSalesLeads, carSalesCustomers } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { buildLeadEvents, createCalendarEvent, CarSalesEventInput } from '@/lib/google-calendar';
 
 export async function GET() {
   try {
@@ -58,6 +59,10 @@ export async function POST(request: NextRequest) {
       registrationNumber,
       commissionAmount,
       stage = "New Lead",
+      reminderDate,
+      releaseDate,
+      commissionDueDate,
+      followUpNotes,
     } = body;
 
     if (!customerId || !carType || !registrationNumber) {
@@ -75,10 +80,53 @@ export async function POST(request: NextRequest) {
         carType,
         registrationNumber,
         commissionAmount: commissionAmount || null,
+        reminderDate: reminderDate || null,
+        releaseDate: releaseDate || null,
+        commissionDueDate: commissionDueDate || null,
+        followUpNotes: followUpNotes || null,
       })
       .returning();
 
-    return NextResponse.json(newLead, { status: 201 });
+    // Get customer details for calendar sync
+    const [customer] = await db
+      .select()
+      .from(carSalesCustomers)
+      .where(eq(carSalesCustomers.id, customerId));
+
+    // Sync to calendar if customer data is available
+    let calendarEvents = [];
+    if (customer) {
+      try {
+        const leadEventData: CarSalesEventInput = {
+          leadId: newLead.id,
+          customerName: customer.name,
+          carType: newLead.carType,
+          registrationNumber: newLead.registrationNumber,
+          stage: newLead.stage,
+          reminderDate: newLead.reminderDate,
+          releaseDate: newLead.releaseDate,
+          commissionDueDate: newLead.commissionDueDate,
+          notes: newLead.followUpNotes,
+        };
+
+        const events = buildLeadEvents(leadEventData);
+        for (const eventInput of events) {
+          const createdEvent = await createCalendarEvent(eventInput);
+          calendarEvents.push(createdEvent);
+        }
+      } catch (calendarError) {
+        console.error('Calendar sync failed:', calendarError);
+        // Continue even if calendar sync fails
+      }
+    }
+
+    return NextResponse.json({ 
+      lead: newLead, 
+      calendarEvents,
+      message: calendarEvents.length > 0 
+        ? `Lead created with ${calendarEvents.length} calendar events` 
+        : 'Lead created (calendar sync skipped)'
+    }, { status: 201 });
   } catch (error) {
     console.error('Error creating car sales lead:', error);
     return NextResponse.json(

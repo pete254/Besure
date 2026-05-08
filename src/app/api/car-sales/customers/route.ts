@@ -1,11 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { carSalesCustomers } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { like, or } from 'drizzle-orm';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const customers = await db.select().from(carSalesCustomers);
+    const searchParams = request.nextUrl.searchParams;
+    const search = searchParams.get('search');
+
+    if (search) {
+      // Search by name or phone
+      const customers = await db
+        .select()
+        .from(carSalesCustomers)
+        .where(
+          search ? 
+            or(
+              like(carSalesCustomers.name, `%${search}%`),
+              like(carSalesCustomers.phone, `%${search}%`)
+            ) 
+            : undefined
+        );
+      return NextResponse.json(customers);
+    }
+
+    const customers = await db.select().from(carSalesCustomers).orderBy(carSalesCustomers.updatedAt);
     return NextResponse.json(customers);
   } catch (error) {
     console.error('Error fetching car sales customers:', error);
