@@ -45,6 +45,10 @@ interface BenefitEntry {
   infotainmentValue?: string;
   entertainmentValue?: string;
   lossOfUseDays?: string;
+  // Medical benefit limits
+  dentalLimit?: string;
+  opticalLimit?: string;
+  maternityLimit?: string;
 }
 
 interface PolicyDocument {
@@ -123,7 +127,7 @@ function getInsurerRateField(insuranceType: string, ins: Insurer): string {
 }
 
 const BODY_TYPES = ["S Wagon", "Saloon", "Pickup/Van", "Bus", "Truck", "Prime Mover", "Trailer"];
-const COVER_TYPES = ["Comprehensive", "TPO", "TPFT"];
+const COVER_TYPES = ["Comprehensive", "TPO", "TPFT", "medical"];
 const PAYMENT_MODES = ["Full Payment", "2 Installments", "3 Installments", "IPF"];
 const STEPS = [
   "Insurance Type", "Customer & Insurer", "Vehicle",
@@ -348,6 +352,13 @@ export default function NewPolicyPage() {
   // Clear benefits when insurance type changes (different group = different benefits)
   useEffect(() => {
     setData(prev => ({ ...prev, benefits: [], totalBenefits: "0" }));
+  }, [data.insuranceType]);
+
+  // Auto-set cover type to 'medical' for medical policies
+  useEffect(() => {
+    if (data.insuranceType === "Medical / Health") {
+      setData(prev => ({ ...prev, coverType: "medical" }));
+    }
   }, [data.insuranceType]);
 
   // Auto-calculate basic premium
@@ -630,7 +641,12 @@ export default function NewPolicyPage() {
           paymentMode: data.paymentMode,
           policyNumber: data.policyNumber || null,
           notes: data.notes,
-          medicalMeta: isMedical ? data.medicalMeta : null,
+          medicalMeta: isMedical ? {
+            ...data.medicalMeta,
+            principalCount: data.medicalMeta.principalCount ? parseInt(data.medicalMeta.principalCount) : null,
+            dependantCount: data.medicalMeta.dependantCount ? parseInt(data.medicalMeta.dependantCount) : null,
+            waitingPeriodDays: data.medicalMeta.waitingPeriodDays ? parseInt(data.medicalMeta.waitingPeriodDays) : null,
+          } : null,
           benefits: data.benefits.map(b => ({
             benefitOptionId: b.benefitOptionId || null,
             benefitName: b.benefitName,
@@ -655,15 +671,40 @@ export default function NewPolicyPage() {
         } : null,
         insurerId: data.insurerId || null,
         insurerNameManual: !data.insurerId ? data.insurerNameManual : null,
+        // Convert medicalMeta string fields to numbers for API validation
+        medicalMeta: isMedical ? {
+          ...data.medicalMeta,
+          principalCount: data.medicalMeta.principalCount ? parseInt(data.medicalMeta.principalCount) : null,
+          dependantCount: data.medicalMeta.dependantCount ? parseInt(data.medicalMeta.dependantCount) : null,
+          waitingPeriodDays: data.medicalMeta.waitingPeriodDays ? parseInt(data.medicalMeta.waitingPeriodDays) : null,
+        } : null,
         documents: [],
       };
+      console.log("Sending payload to API:", JSON.stringify(payload, null, 2));
       const res = await fetch("/api/policies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const result = await res.json();
-      if (!res.ok) { setError(result.error || "Failed to create policy"); return; }
+      console.log("API response:", result);
+      if (!res.ok) { 
+        console.error("API Error:", result);
+        let errorMessage = result.error || "Failed to create policy";
+        
+        if (result.details && result.details.length > 0) {
+          const fieldErrors = result.details.map((d: any) => `${d.field}: ${d.message}`).join('; ');
+          errorMessage += ` - ${fieldErrors}`;
+        }
+        
+        if (result.issues && result.issues.length > 0) {
+          const issueDetails = result.issues.map((issue: any) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
+          errorMessage += ` - ${issueDetails}`;
+        }
+        
+        setError(errorMessage); 
+        return; 
+      }
       policyId = result.policy.id;
     }
 
@@ -848,6 +889,47 @@ export default function NewPolicyPage() {
       );
     }
 
+    // Medical benefits (Dental, Optical, Maternity, etc.)
+    if (cfg.type === "medical" || b.benefitName?.toLowerCase().includes("dental") || b.benefitName?.toLowerCase().includes("optical") || b.benefitName?.toLowerCase().includes("maternity")) {
+      const benefitLower = b.benefitName?.toLowerCase() || "";
+      const limitFieldKey = benefitLower.includes("dental") ? "dentalLimit"
+        : benefitLower.includes("optical") ? "opticalLimit"
+        : benefitLower.includes("maternity") ? "maternityLimit" : null;
+
+      if (!limitFieldKey) return null;
+
+      const currentLimit = (b as any)[limitFieldKey] || "";
+      const limitLabel = benefitLower.includes("dental") ? "Dental Limit"
+        : benefitLower.includes("optical") ? "Optical Limit" : "Maternity Limit";
+
+      return (
+        <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              {limitLabel} (KES)
+            </label>
+            <input type="number" placeholder="e.g. 100000" value={currentLimit}
+              onChange={(e) => updateBenefitField(b.benefitOptionId, limitFieldKey as keyof BenefitEntry, e.target.value)}
+              style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+              onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>Maximum coverage limit for {b.benefitName}</p>
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+              Premium (KES)
+            </label>
+            <input type="number" step="0.01" placeholder="0.00" value={b.amountKes || ""}
+              onChange={(e) => updateBenefitField(b.benefitOptionId, "amountKes", e.target.value)}
+              style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--brand)", borderRadius: "6px", color: "var(--brand)", fontSize: "13px", outline: "none", fontWeight: 600 }}
+              onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>Premium cost for this benefit</p>
+          </div>
+        </div>
+      );
+    }
+
     return null;
   }
 
@@ -890,6 +972,25 @@ export default function NewPolicyPage() {
             const saved = await loadDraft();
             if (saved) {
               setData(saved as PolicyData);
+              // Restore the step from draft if available
+              if (draftId) {
+                try {
+                  const res = await fetch(`/api/drafts/${draftId}`);
+                  if (res.ok) {
+                    const result = await res.json();
+                    if (result.draft?.step) {
+                      const restoredStep = typeof result.draft.step === 'string' 
+                        ? parseInt(result.draft.step, 10) 
+                        : result.draft.step;
+                      if (!isNaN(restoredStep) && restoredStep > 0) {
+                        setStep(restoredStep);
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.warn("Could not restore draft step:", e);
+                }
+              }
               setDraftResolved(true);
             }
           }}
@@ -1245,7 +1346,7 @@ export default function NewPolicyPage() {
                   onChange={(e) => setData(prev => ({ ...prev, vehicle: { ...prev.vehicle, seats: e.target.value } }))}
                   style={inStyle} onFocus={foc} onBlur={blr} />
               </div>
-              {(data.insuranceType !== "Motor - Private Comp") && (
+              {isMotor && (
                 <div>
                   <label style={lbStyle}>Tonnage</label>
                   <input type="number" placeholder="3.5" value={data.vehicle.tonnage}
@@ -1263,19 +1364,26 @@ export default function NewPolicyPage() {
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
           <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>Cover Details & Valuation</p>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            {isMotor && data.insuranceType !== "Motor - Commercial Third Party" && (
+            {(isMotor || isMedical) && data.insuranceType !== "Motor - Commercial Third Party" && (
               <div>
                 <label style={lbStyle}>Cover Type *</label>
-                <div style={{ display: "flex", gap: "10px" }}>
-                  {COVER_TYPES.map((ct) => (
-                    <label key={ct} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "10px", borderRadius: "8px", cursor: "pointer", border: `1px solid ${data.coverType === ct ? "var(--brand)" : "var(--border)"}`, backgroundColor: data.coverType === ct ? "rgba(16,185,129,0.08)" : "var(--bg-app)" }}>
-                      <input type="radio" name="coverType" value={ct} checked={data.coverType === ct}
-                        onChange={(e) => setData(prev => ({ ...prev, coverType: e.target.value }))}
-                        style={{ width: "auto", margin: 0 }} />
-                      <span style={{ fontSize: "13px", fontWeight: 600, color: data.coverType === ct ? "var(--brand)" : "var(--text-secondary)" }}>{ct}</span>
-                    </label>
-                  ))}
-                </div>
+                {isMedical ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px", borderRadius: "8px", border: "1px solid var(--brand)", backgroundColor: "rgba(16,185,129,0.08)" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--brand)" }}>medical</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>(Automatically set for medical policies)</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    {COVER_TYPES.filter(ct => ct !== "medical").map((ct) => (
+                      <label key={ct} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "10px", borderRadius: "8px", cursor: "pointer", border: `1px solid ${data.coverType === ct ? "var(--brand)" : "var(--border)"}`, backgroundColor: data.coverType === ct ? "rgba(16,185,129,0.08)" : "var(--bg-app)" }}>
+                        <input type="radio" name="coverType" value={ct} checked={data.coverType === ct}
+                          onChange={(e) => setData(prev => ({ ...prev, coverType: e.target.value }))}
+                          style={{ width: "auto", margin: 0 }} />
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: data.coverType === ct ? "var(--brand)" : "var(--text-secondary)" }}>{ct}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
@@ -1459,12 +1567,16 @@ export default function NewPolicyPage() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {[
+            {(isMedical ? [
+              { type: "PROPOSAL",  label: "Proposal Form",   icon: "📝", desc: "Signed insurance proposal / application form" },
+              { type: "QUOTE",     label: "Quotation",       icon: "💰", desc: "Insurance quotation / premium estimate" },
+              { type: "POLICY",    label: "Policy Document", icon: "📄", desc: "Issued policy document" },
+            ] : [
               { type: "VALUATION", label: "Valuation Report", icon: "📋", desc: "Vehicle valuation from certified assessor" },
               { type: "PROPOSAL",  label: "Proposal Form",   icon: "📝", desc: "Signed insurance proposal / application form" },
               { type: "LOGBOOK",   label: "Logbook",         icon: "📖", desc: "Original or certified copy of vehicle logbook" },
               { type: "OTHER",     label: "Quotation",       icon: "💰", desc: "Insurance quotation document" },
-            ].map(({ type, label, icon, desc }) => {
+            ]).map(({ type, label, icon, desc }) => {
               const existing = data.documents.find(d => d.docType === type);
               return (
                 <div key={type} style={{

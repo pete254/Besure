@@ -414,10 +414,14 @@ function ApplicationHistoryModule({ data }: { data: ApplicationHistoryData }) {
                     minute: "2-digit",
                   });
 
+                  const href = draft.draftType === "policy"
+                    ? `/policies/new?draft=${draft.id}`
+                    : `/claims/new?draft=${draft.id}`;
+
                   return (
                     <a
                       key={draft.id}
-                      href={`/drafts/${draft.id}`}
+                      href={href}
                       style={{
                         display: "flex",
                         alignItems: "center",

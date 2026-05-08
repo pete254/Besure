@@ -26,19 +26,19 @@ const createPolicySchema = z.object({
   insurerId: z.string().uuid().optional().nullable(),
   insurerNameManual: z.string().optional().nullable(),
   vehicle: z.object({
-    make: z.string().min(1, "Vehicle make is required"),
-    model: z.string().min(1, "Vehicle model is required"),
-    year: z.number().int().min(1900, "Invalid year"),
+    make: z.string().optional().nullable(),
+    model: z.string().optional().nullable(),
+    year: z.number().int().min(1900).optional().nullable(),
     cc: z.number().optional().nullable(),
     tonnage: z.string().optional().nullable(),
     seats: z.number().optional().nullable(),
-    chassisNo: z.string().min(1, "Chassis number is required"),
-    engineNo: z.string().min(1, "Engine number is required"),
-    regNo: z.string().min(1, "Registration number is required"),
+    chassisNo: z.string().optional().nullable(),
+    engineNo: z.string().optional().nullable(),
+    regNo: z.string().optional().nullable(),
     bodyType: z.string().optional().nullable(),
     colour: z.string().optional().nullable(),
   }).optional().nullable(),
-  coverType: z.enum(["Comprehensive", "TPO", "TPFT"]).optional().nullable(),
+  coverType: z.enum(["Comprehensive", "TPO", "TPFT", "medical"]).optional().nullable(),
   sumInsured: z.string().optional().nullable(),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
@@ -132,11 +132,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log("POST /api/policies - Request body:", JSON.stringify(body, null, 2));
+    
     const parsed = createPolicySchema.safeParse(body);
 
     if (!parsed.success) {
+      console.error("Validation failed - Issues:", JSON.stringify(parsed.error.issues, null, 2));
+      console.error("Validation failed - Error details:", parsed.error.message);
+      
       return NextResponse.json(
-        { error: "Validation failed", issues: parsed.error.issues },
+        { 
+          error: "Validation failed", 
+          issues: parsed.error.issues,
+          details: parsed.error.issues.map(issue => ({
+            field: issue.path.join('.'),
+            message: issue.message,
+            code: issue.code,
+            expected: issue.expected,
+            received: issue.received
+          }))
+        },
         { status: 400 }
       );
     }
@@ -254,6 +269,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ policy: newPolicy }, { status: 201 });
   } catch (error) {
     console.error("POST /api/policies error:", error);
-    return NextResponse.json({ error: "Failed to create policy" }, { status: 500 });
+    console.error("Error stack:", error instanceof Error ? error.stack : 'No stack trace');
+    return NextResponse.json({ 
+      error: "Failed to create policy",
+      details: error instanceof Error ? error.message : "Unknown error"
+    }, { status: 500 });
   }
 }

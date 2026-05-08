@@ -69,31 +69,41 @@ export function useDraft(
 
   const saveDraft = useCallback(async () => {
     if (saving) return;
+    console.log("useDraft: saveDraft called", { draftType, draftKey, sessionId: sessionId.current, step, label });
     setSaving(true);
     try {
+      const payload = {
+        draftType,
+        draftKey,
+        sessionId: sessionId.current,
+        data,
+        step: step != null ? String(step) : null,
+        label: label || null,
+      };
+      console.log("useDraft: Sending payload to API:", JSON.stringify(payload, null, 2));
+      
       const res = await fetch("/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          draftType,
-          draftKey,
-          sessionId: sessionId.current,
-          data,
-          step: step != null ? String(step) : null,
-          label: label || null,
-        }),
+        body: JSON.stringify(payload),
       });
+      console.log("useDraft: API response status:", res.status);
+      
       if (res.ok) {
         const result = await res.json();
+        console.log("useDraft: Draft saved successfully:", result.draft?.id);
         setDraftSaved(true);
         setLastSaved(new Date());
         setHasDraft(true);
         if (result.draft?.id) setDraftId(result.draft.id);
         // Reset "saved" indicator after 3 seconds
         setTimeout(() => setDraftSaved(false), 3000);
+      } else {
+        const error = await res.json();
+        console.error("useDraft: API error response:", error);
       }
     } catch (e) {
-      console.warn("Draft save failed:", e);
+      console.error("useDraft: Draft save failed:", e);
     } finally {
       setSaving(false);
     }

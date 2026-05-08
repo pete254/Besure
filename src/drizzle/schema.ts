@@ -40,7 +40,7 @@ export const insuranceTypeEnum = pgEnum("insurance_type", [
   "Travel Insurance",
 ]);
 
-export const coverTypeEnum = pgEnum("cover_type", ["Comprehensive", "TPO", "TPFT"]);
+export const coverTypeEnum = pgEnum("cover_type", ["Comprehensive", "TPO", "TPFT", "medical"]);
 
 // Updated body types per client requirement
 export const bodyTypeEnum = pgEnum("body_type", [

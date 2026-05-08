@@ -103,6 +103,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log("POST /api/drafts - Request body:", JSON.stringify(body, null, 2));
     const parsed = saveDraftSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -113,6 +114,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { draftType, draftKey, sessionId, data, step, label } = parsed.data;
+    console.log("Parsed draft data:", { draftType, draftKey, sessionId, step, label });
 
     // Check if draft already exists for this key + session
     const existing = await db
@@ -120,9 +122,13 @@ export async function POST(req: NextRequest) {
       .from(drafts)
       .where(and(eq(drafts.draftType, draftType), eq(drafts.draftKey, draftKey)));
 
+    console.log("Existing drafts for this key:", existing.length, existing.map(d => ({ id: d.id, sessionId: d.sessionId })));
+
     const match = sessionId
       ? existing.find(d => d.sessionId === sessionId)
       : existing[0];
+
+    console.log("Match found:", match ? match.id : 'none');
 
     const serialized = JSON.stringify(data);
     const stepStr = step != null ? String(step) : null;
@@ -132,6 +138,7 @@ export async function POST(req: NextRequest) {
     expiresAt.setDate(expiresAt.getDate() + 30);
 
     if (match) {
+      console.log("Updating existing draft:", match.id);
       const [updated] = await db
         .update(drafts)
         .set({
@@ -144,9 +151,11 @@ export async function POST(req: NextRequest) {
         .where(eq(drafts.id, match.id))
         .returning();
 
+      console.log("Draft updated successfully:", updated.id);
       return NextResponse.json({ draft: { ...updated, data } });
     }
 
+    console.log("Creating new draft");
     const [newDraft] = await db
       .insert(drafts)
       .values({
@@ -160,6 +169,7 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
+    console.log("Draft created successfully:", newDraft.id);
     return NextResponse.json({ draft: { ...newDraft, data } }, { status: 201 });
   } catch (error) {
     console.error("POST /api/drafts error:", error);
