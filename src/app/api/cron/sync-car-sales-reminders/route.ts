@@ -68,9 +68,9 @@ export async function POST(request: NextRequest) {
         const eventInput: CarSalesEventInput = {
           leadId: reminder.leadId,
           customerName: reminder.customerName || "Unknown Customer",
-          carType: reminder.carType,
-          registrationNumber: reminder.registrationNumber,
-          stage: reminder.stage,
+          carType: reminder.carType || "Unknown Car",
+          registrationNumber: reminder.registrationNumber || "Unknown Registration",
+          stage: reminder.stage || "Unknown Stage",
           reminderDate: reminder.reminderDate,
           releaseDate: reminder.releaseDate || undefined,
           commissionDueDate: reminder.commissionDueDate || undefined,
