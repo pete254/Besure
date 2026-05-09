@@ -3,11 +3,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Car, User, AlertTriangle, MessageSquare,
-  Check, X, ChevronRight,
+  Check, X, ChevronRight, Trash, Loader2,
 } from "lucide-react";
 
 interface Claim {
@@ -63,6 +63,7 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 
 export default function ClaimDetailPage() {
   const { id } = useParams();
+  const router = useRouter();
   const [claim, setClaim] = useState<Claim | null>(null);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -79,6 +80,8 @@ export default function ClaimDetailPage() {
   const [financials, setFinancials] = useState({
     repairEstimate: "", approvedAmount: "", settlementDate: "", settlementMethod: "",
   });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -146,6 +149,21 @@ export default function ClaimDetailPage() {
     }
   }
 
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/claims/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete claim");
+      router.push("/claims");
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete claim. Please try again.");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
   if (loading) return <div style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)" }}>Loading claim...</div>;
   if (!claim)  return <div style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)" }}>Claim not found.</div>;
 
@@ -184,16 +202,32 @@ export default function ClaimDetailPage() {
             </p>
           </div>
         </div>
-        {customer && (
-          <Link
-            href={`/customers/${customer.id}`}
-            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "8px", border: "1px solid var(--border)", textDecoration: "none", fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "var(--brand)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "var(--border)")}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {customer && (
+            <Link
+              href={`/customers/${customer.id}`}
+              style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "8px", border: "1px solid var(--border)", textDecoration: "none", fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "var(--brand)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "var(--border)")}
+            >
+              <User size={13} /> {customerName}
+            </Link>
+          )}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #f87171", backgroundColor: "rgba(248,113,113,0.08)", color: "#f87171", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(248,113,113,0.12)";
+              e.currentTarget.style.borderColor = "#ef4444";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(248,113,113,0.08)";
+              e.currentTarget.style.borderColor = "#f87171";
+            }}
           >
-            <User size={13} /> {customerName}
-          </Link>
-        )}
+            <Trash size={12} /> Delete
+          </button>
+        </div>
       </div>
 
       {/* ── Stage pipeline ── */}
@@ -430,6 +464,53 @@ export default function ClaimDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center",
+          justifyContent: "center", zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: "var(--bg-card)", border: "1px solid var(--border)",
+            borderRadius: "12px", padding: "24px", maxWidth: "400px", width: "90%"
+          }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 12px" }}>
+              Delete Claim
+            </h3>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "0 0 20px", lineHeight: "1.5" }}>
+              Are you sure you want to delete claim {claim.claimNumber}? This action cannot be undone and will remove all associated data including documents and notes.
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                style={{
+                  padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)",
+                  backgroundColor: "var(--bg-app)", color: "var(--text-secondary)",
+                  fontSize: "13px", fontWeight: 500, cursor: deleting ? "not-allowed" : "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{
+                  padding: "8px 16px", borderRadius: "6px", border: "1px solid #f87171",
+                  backgroundColor: "#f87171", color: "#ffffff",
+                  fontSize: "13px", fontWeight: 500, cursor: deleting ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", gap: "6px"
+                }}
+              >
+                {deleting ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Trash size={14} />}
+                {deleting ? "Deleting..." : "Delete Claim"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

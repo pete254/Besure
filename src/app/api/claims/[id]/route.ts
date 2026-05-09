@@ -159,3 +159,27 @@ export async function PUT(
     );
   }
 }
+
+// DELETE /api/claims/[id]
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const [deleted] = await db
+      .delete(claims)
+      .where(eq(claims.id, id))
+      .returning();
+
+    if (!deleted) {
+      return NextResponse.json({ error: "Claim not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /api/claims/[id] error:", error);
+    return NextResponse.json({ error: "Failed to delete claim" }, { status: 500 });
+  }
+}

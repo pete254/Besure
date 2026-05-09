@@ -8,7 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Car, CreditCard, FileText, Calendar, User, Building2,
-  CheckCircle2, Clock, RefreshCw, X, Upload, Eye, Loader2, AlertCircle,
+  CheckCircle2, Clock, RefreshCw, X, Upload, Eye, Loader2, AlertCircle, Trash,
 } from "lucide-react";
 import RiskNoteButton from "@/components/RiskNoteButton";
 
@@ -266,6 +266,8 @@ export default function PolicyDetailPage() {
   const [certExpiryForm, setCertExpiryForm] = useState({ certificateExpiryDate: "", certificateExpiryReason: "" });
   const [certExpirySaving, setCertExpirySaving] = useState(false);
   const [certExpiryError, setCertExpiryError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function fetchPolicy() {
     try {
@@ -317,6 +319,21 @@ export default function PolicyDetailPage() {
       setShowCertExpiry(false);
     } catch { setCertExpiryError("Something went wrong"); }
     finally { setCertExpirySaving(false); }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/policies/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete policy");
+      router.push("/policies");
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete policy. Please try again.");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   }
 
   if (loading) return <div style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)" }}>Loading policy...</div>;
@@ -395,6 +412,20 @@ export default function PolicyDetailPage() {
                 <CheckCircle2 size={12} /> Renewed
               </span>
             )}
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #f87171", backgroundColor: "rgba(248,113,113,0.08)", color: "#f87171", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(248,113,113,0.12)";
+                e.currentTarget.style.borderColor = "#ef4444";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(248,113,113,0.08)";
+                e.currentTarget.style.borderColor = "#f87171";
+              }}
+            >
+              <Trash size={12} /> Delete
+            </button>
           </div>
         </div>
       </div>
@@ -658,6 +689,53 @@ export default function PolicyDetailPage() {
           }
         }
       `}</style>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center",
+          justifyContent: "center", zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: "var(--bg-card)", border: "1px solid var(--border)",
+            borderRadius: "12px", padding: "24px", maxWidth: "400px", width: "90%"
+          }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 12px" }}>
+              Delete Policy
+            </h3>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "0 0 20px", lineHeight: "1.5" }}>
+              Are you sure you want to delete policy {policy.policyNumber || "this policy"}? This action cannot be undone and will remove all associated data including payments, benefits, and documents.
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                style={{
+                  padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)",
+                  backgroundColor: "var(--bg-app)", color: "var(--text-secondary)",
+                  fontSize: "13px", fontWeight: 500, cursor: deleting ? "not-allowed" : "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{
+                  padding: "8px 16px", borderRadius: "6px", border: "1px solid #f87171",
+                  backgroundColor: "#f87171", color: "#ffffff",
+                  fontSize: "13px", fontWeight: 500, cursor: deleting ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", gap: "6px"
+                }}
+              >
+                {deleting ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Trash size={14} />}
+                {deleting ? "Deleting..." : "Delete Policy"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
