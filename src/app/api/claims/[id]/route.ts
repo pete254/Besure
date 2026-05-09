@@ -10,6 +10,7 @@ import {
   claimDocuments,
   followupNotes,
   garages,
+  garageUpdates,
   users,
 } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -168,6 +169,17 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // Delete related records first due to foreign key constraints
+    await Promise.all([
+      // Delete claim documents
+      db.delete(claimDocuments).where(eq(claimDocuments.claimId, id)),
+      // Delete garage updates
+      db.delete(garageUpdates).where(eq(garageUpdates.claimId, id)),
+      // Delete followup notes
+      db.delete(followupNotes).where(eq(followupNotes.claimId, id)),
+    ]);
+
+    // Now delete the claim
     const [deleted] = await db
       .delete(claims)
       .where(eq(claims.id, id))
