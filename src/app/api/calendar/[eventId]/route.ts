@@ -8,10 +8,10 @@ import {
 // PUT /api/calendar/[eventId] - Update event
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
-    const eventId = params.eventId;
+    const { eventId } = await params;
     const body: Partial<CalendarEventInput> = await request.json();
     
     const event = await updateCalendarEvent(eventId, body);
@@ -29,10 +29,10 @@ export async function PUT(
 // DELETE /api/calendar/[eventId] - Delete event
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
-    const eventId = params.eventId;
+    const { eventId } = await params;
     
     await deleteCalendarEvent(eventId);
     

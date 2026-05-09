@@ -425,6 +425,8 @@ export const notificationLog = pgTable("notification_log", {
   sentAt: timestamp("sent_at").notNull().defaultNow(),
   status: notificationStatusEnum("status").notNull().default("sent"),
   errorMessage: text("error_message"),
+  googleEventId: varchar("google_event_id", { length: 255 }),
+  googleCalendarSyncedAt: timestamp("google_calendar_synced_at"),
 });
 
 export const notificationLogRelations = relations(notificationLog, ({ one }) => ({

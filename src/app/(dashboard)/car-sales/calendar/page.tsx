@@ -116,7 +116,7 @@ export default function CalendarPage() {
   async function syncToGoogleCalendar() {
     setSyncing(true);
     try {
-      const res = await fetch("/api/car-sales/calendar/sync-reminders", {
+      const res = await fetch("/api/cron/sync-car-sales-reminders/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });

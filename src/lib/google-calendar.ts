@@ -204,3 +204,47 @@ export function buildLeadEvents(input: CarSalesEventInput): CalendarEventInput[]
 
   return events;
 }
+
+// ─── Notification reminders sync ──────────────────────────────────────────────
+
+/**
+ * Build calendar event from a notification reminder
+ * Maps notification types to calendar event titles and dates
+ */
+export function buildNotificationEvent(
+  notification: {
+    id: string;
+    notificationType: string;
+    sentAt: Date;
+    policyId?: string;
+    customerName?: string;
+  }
+): CalendarEventInput {
+  const typeToTitle: Record<string, string> = {
+    payment_reminder_10d: "💳 Payment Due (10 days)",
+    payment_reminder_3d: "💳 Payment Due (3 days)",
+    payment_reminder_1d: "💳 Payment Due (TOMORROW)",
+    policy_expiry: "⚠️ Policy Expires Soon",
+  };
+
+  const typeToColor: Record<string, string> = {
+    payment_reminder_10d: "5",  // Banana (yellow)
+    payment_reminder_3d: "6",   // Tangerine (orange)
+    payment_reminder_1d: "11",  // Tomato (red)
+    policy_expiry: "11",        // Tomato (red)
+  };
+
+  const title = typeToTitle[notification.notificationType] || notification.notificationType;
+  const eventDate = new Date(notification.sentAt);
+  
+  // Format as YYYY-MM-DD for Google Calendar
+  const startDate = eventDate.toISOString().split("T")[0];
+
+  return {
+    title: `${title}${notification.customerName ? ` - ${notification.customerName}` : ""}`,
+    description: `Notification ID: ${notification.id}${notification.policyId ? `\nPolicy ID: ${notification.policyId}` : ""}`,
+    startDate,
+    colorId: typeToColor[notification.notificationType] || "5",
+  };
+}
+
