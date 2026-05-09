@@ -21,7 +21,7 @@ import {
   customers,
   notificationTypeEnum,
 } from "@/drizzle/schema";
-import { eq, and, isNull, gte, lte, ne } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, gte, lte, ne } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
@@ -82,7 +82,8 @@ export async function POST(request: NextRequest) {
           .from(notificationLog)
           .where(
             and(
-              eq(notificationLog.policyId, p.policyId),
+              isNotNull(notificationLog.policyId),
+              eq(notificationLog.policyId, p.policyId as any),
               eq(notificationLog.notificationType, "payment_reminder_1d"),
               gte(notificationLog.sentAt, new Date(Date.now() - 24 * 60 * 60 * 1000))
             )
@@ -129,7 +130,8 @@ export async function POST(request: NextRequest) {
           .from(notificationLog)
           .where(
             and(
-              eq(notificationLog.policyId, p.policyId),
+              isNotNull(notificationLog.policyId),
+              eq(notificationLog.policyId, p.policyId as any),
               eq(notificationLog.notificationType, "payment_reminder_3d"),
               gte(notificationLog.sentAt, new Date(Date.now() - 24 * 60 * 60 * 1000))
             )
@@ -176,7 +178,8 @@ export async function POST(request: NextRequest) {
           .from(notificationLog)
           .where(
             and(
-              eq(notificationLog.policyId, p.policyId),
+              isNotNull(notificationLog.policyId),
+              eq(notificationLog.policyId, p.policyId as any),
               eq(notificationLog.notificationType, "payment_reminder_10d"),
               gte(notificationLog.sentAt, new Date(Date.now() - 24 * 60 * 60 * 1000))
             )
