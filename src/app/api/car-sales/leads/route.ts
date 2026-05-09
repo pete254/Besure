@@ -72,6 +72,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const today = new Date().toISOString().split('T')[0]; // Today's date in YYYY-MM-DD format
+
     const [newLead] = await db
       .insert(carSalesLeads)
       .values({
@@ -80,9 +82,9 @@ export async function POST(request: NextRequest) {
         carType,
         registrationNumber,
         commissionAmount: commissionAmount || null,
-        reminderDate: reminderDate || null,
-        releaseDate: releaseDate || null,
-        commissionDueDate: commissionDueDate || null,
+        reminderDate: reminderDate || today,
+        releaseDate: releaseDate || today,
+        commissionDueDate: commissionDueDate || today,
         followUpNotes: followUpNotes || null,
       })
       .returning();
