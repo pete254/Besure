@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
@@ -132,11 +132,98 @@ export default function NewCustomerPage() {
     certOfIncorporationFile: "", cr12File: "", companyKraPinFile: "",
   });
 
+  React.useEffect(() => {
+    console.log("✅ [Customer Form] Component mounted - New customer form initialized");
+    return () => {
+      console.log("🔚 [Customer Form] Component unmounted");
+    };
+  }, []);
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    console.log("📝 [Customer Form] Field changed:", { name, value, customerType: form.customerType });
+    
+    // If changing customer type, clear irrelevant fields
+    if (name === "customerType") {
+      if (value === "Individual") {
+        // Switching to Individual: clear all company-specific fields and reset personal fields
+        setForm(prev => ({
+          ...prev,
+          [name]: value,
+          // Reset personal/contact fields
+          firstName: "",
+          lastName: "",
+          middleName: "",
+          phone: "",
+          email: "",
+          county: "",
+          physicalAddress: "",
+          dateOfBirth: "",
+          gender: "",
+          idNumberValue: "",
+          kraPinValue: "",
+          idNumberFile: "",
+          kraPinFile: "",
+          // Clear company fields
+          companyName: "",
+          town: "",
+          postalAddress: "",
+          companyEmail: "",
+          companyPhone: "",
+          certOfIncorporationValue: "",
+          cr12Value: "",
+          companyKraPinValue: "",
+          certOfIncorporationFile: "",
+          cr12File: "",
+          companyKraPinFile: "",
+        }));
+        setDirectors([]);
+      } else if (value === "Company") {
+        // Switching to Company: clear all fields and reset personal info
+        setForm(prev => ({
+          ...prev,
+          [name]: value,
+          // Reset personal/contact fields
+          firstName: "",
+          lastName: "",
+          middleName: "",
+          phone: "",
+          email: "",
+          county: "",
+          physicalAddress: "",
+          dateOfBirth: "",
+          gender: "",
+          idNumberValue: "",
+          kraPinValue: "",
+          idNumberFile: "",
+          kraPinFile: "",
+          // Clear company fields
+          companyName: "",
+          town: "",
+          postalAddress: "",
+          companyEmail: "",
+          companyPhone: "",
+          certOfIncorporationValue: "",
+          cr12Value: "",
+          companyKraPinValue: "",
+          certOfIncorporationFile: "",
+          cr12File: "",
+          companyKraPinFile: "",
+        }));
+        setDirectors([]);
+      }
+      setFieldErrors({});
+      return;
+    }
+    
+    setForm(prev => {
+      const updated = { ...prev, [name]: value };
+      console.log("📝 [Customer Form] Form state updated for field:", { name, newValue: value });
+      return updated;
+    });
     // Clear field error when user starts typing
-    if (fieldErrors[e.target.name]) {
-      setFieldErrors(prev => ({ ...prev, [e.target.name]: "" }));
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: "" }));
     }
   }
 
@@ -160,6 +247,14 @@ export default function NewCustomerPage() {
     e.preventDefault();
     setError("");
     setFieldErrors({});
+
+    console.log("🔍 [Customer Form] Submitting customer form:", {
+      customerType: form.customerType,
+      firstName: form.firstName,
+      lastName: form.lastName,
+      companyName: isCompany ? form.companyName : "N/A",
+      directorsCount: directors.length
+    });
 
     // Validate required fields
     const errors = runValidators([
@@ -219,6 +314,7 @@ export default function NewCustomerPage() {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setError("❌ Please fix all errors below before saving the customer.");
+      console.error("❌ [Customer Form] Validation errors:", errors);
       // Scroll to first error
       setTimeout(() => {
         const firstError = document.querySelector("[data-error='true']");
@@ -234,16 +330,37 @@ export default function NewCustomerPage() {
       // Extract only the fields needed for the API (exclude file names)
       const { idNumberFile, kraPinFile, certOfIncorporationFile, cr12File, companyKraPinFile, ...formData } = form;
       
+      const payload = { ...formData, directors: directors.length > 0 ? directors : null };
+      
+      console.log("📤 [Customer Form] Sending request to /api/customers:", {
+        method: "POST",
+        payloadKeys: Object.keys(payload),
+        customerType: payload.customerType,
+        directorsCount: payload.directors?.length || 0
+      });
+
       const res = await fetch("/api/customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, directors: directors.length > 0 ? directors : null }),
+        body: JSON.stringify(payload),
       });
+
+      console.log("📥 [Customer Form] API response status:", res.status);
+
       const data = await res.json();
       
+      console.log("📋 [Customer Form] Response data:", {
+        ok: res.ok,
+        hasError: !!data.error,
+        hasIssues: !!data.issues,
+        customerId: data.customer?.id,
+        errorMessage: data.error
+      });
+
       if (!res.ok) {
         // Handle Zod validation errors with field paths
         if (data.issues && Array.isArray(data.issues)) {
+          console.error("❌ [Customer Form] Zod validation issues:", data.issues);
           const apiErrors: Record<string, string> = {};
           data.issues.forEach((issue: any) => {
             const fieldPath = issue.path?.join(".") || "form";
@@ -252,15 +369,17 @@ export default function NewCustomerPage() {
           setFieldErrors(apiErrors);
           setError("❌ The server found validation errors. Please check and try again.");
         } else {
+          console.error("❌ [Customer Form] Server error:", data.error);
           setError(`❌ ${data.error || "Failed to create customer. Please try again."}`);
         }
         return;
       }
       
+      console.log("✅ [Customer Form] Customer created successfully:", data.customer?.id);
       router.push(`/customers/${data.customer.id}`);
     } catch (err) {
+      console.error("❌ [Customer Form] Unexpected error:", err);
       setError("❌ An unexpected error occurred. Please try again.");
-      console.error("Customer creation error:", err);
     } finally {
       setLoading(false);
     }
@@ -429,6 +548,12 @@ export default function NewCustomerPage() {
                 <Plus size={13} /> Add Director
               </button>
             </div>
+
+            {fieldErrors.directors && (
+              <div style={{ padding: "12px 16px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "13px", marginBottom: "16px", fontWeight: 500 }}>
+                {fieldErrors.directors}
+              </div>
+            )}
 
             {directors.length === 0 ? (
               <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>No directors added yet. Click "Add Director" to add one.</p>
