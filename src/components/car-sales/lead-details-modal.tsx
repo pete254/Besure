@@ -106,11 +106,12 @@ export function LeadDetailsModal({ lead, onClose, onUpdate }: LeadDetailsModalPr
   const [notes, setNotes] = useState<Note[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [newNote, setNewNote] = useState("");
-  const [newReminderDate, setNewReminderDate] = useState("");
+  const [newReminderDate, setNewReminderDate] = useState(new Date().toISOString().split('T')[0]);
   const [newReminderType, setNewReminderType] = useState("");
   const [newReminderNotes, setNewReminderNotes] = useState("");
 
   // Form state
+  const today = new Date().toISOString().split('T')[0];
   const [formData, setFormData] = useState({
     stage: lead.stage,
     carType: lead.carType,
@@ -119,10 +120,10 @@ export function LeadDetailsModal({ lead, onClose, onUpdate }: LeadDetailsModalPr
     purchaseType: lead.purchaseType || "",
     selectedBank: lead.selectedBank || "",
     depositAmount: lead.depositAmount?.toString() || "",
-    paymentDate: lead.paymentDate || "",
+    paymentDate: lead.paymentDate || today,
     balanceRemaining: lead.balanceRemaining?.toString() || "",
-    reminderDate: lead.reminderDate || "",
-    releaseDate: lead.releaseDate || "",
+    reminderDate: lead.reminderDate || today,
+    releaseDate: lead.releaseDate || today,
     commissionStatus: lead.commissionStatus || "Pending",
     finalNotes: lead.finalNotes || "",
     lostReason: lead.lostReason || "",
@@ -280,6 +281,40 @@ export function LeadDetailsModal({ lead, onClose, onUpdate }: LeadDetailsModalPr
                   value={formData.commissionAmount}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, commissionAmount: e.target.value})}
                   placeholder="KES"
+                />
+              </div>
+              <div>
+                <Label>Deposit Amount</Label>
+                <Input
+                  type="number"
+                  value={formData.depositAmount}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, depositAmount: e.target.value})}
+                  placeholder="KES"
+                />
+              </div>
+              <div>
+                <Label>Payment Date</Label>
+                <Input
+                  type="date"
+                  value={formData.paymentDate}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, paymentDate: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label>Balance Remaining</Label>
+                <Input
+                  type="number"
+                  value={formData.balanceRemaining}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, balanceRemaining: e.target.value})}
+                  placeholder="KES"
+                />
+              </div>
+              <div>
+                <Label>Reminder Date</Label>
+                <Input
+                  type="date"
+                  value={formData.reminderDate}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, reminderDate: e.target.value})}
                 />
               </div>
               <div>

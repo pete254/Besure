@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
         carType,
         registrationNumber,
         commissionAmount: commissionAmount || null,
+        paymentDate: paymentDate || today,
         reminderDate: reminderDate || today,
         releaseDate: releaseDate || today,
         commissionDueDate: commissionDueDate || today,

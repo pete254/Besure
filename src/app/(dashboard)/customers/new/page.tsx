@@ -165,11 +165,23 @@ export default function NewCustomerPage() {
     const errors = runValidators([
       { field: "firstName", fn: () => validateRequired(form.firstName, "First name") },
       { field: "lastName", fn: () => validateRequired(form.lastName, "Last name") },
-      { field: "phone", fn: () => `⚠️ ${validatePhone(form.phone) || ""}`.trim() ? `⚠️ ${validatePhone(form.phone)}` : null },
-      { field: "email", fn: () => form.email ? `⚠️ ${validateEmail(form.email) || ""}`.trim() ? `⚠️ ${validateEmail(form.email)}` : null : null },
-      { field: "kraPinValue", fn: () => form.kraPinValue ? `⚠️ ${validateKRAPin(form.kraPinValue) || ""}`.trim() ? `⚠️ ${validateKRAPin(form.kraPinValue)}` : null : null },
+      { field: "phone", fn: () => {
+        const error = validatePhone(form.phone);
+        return error ? `⚠️ ${error}` : null;
+      }},
+      { field: "email", fn: () => {
+        const error = validateEmail(form.email);
+        return error ? `⚠️ ${error}` : null;
+      }},
+      { field: "kraPinValue", fn: () => {
+        const error = validateKRAPin(form.kraPinValue);
+        return error ? `⚠️ ${error}` : null;
+      }},
       ...(isCompany
-        ? [{ field: "companyName", fn: () => `⚠️ ${validateCompanyName(form.companyName) || ""}`.trim() ? `⚠️ ${validateCompanyName(form.companyName)}` : null }]
+        ? [{ field: "companyName", fn: () => {
+          const error = validateCompanyName(form.companyName);
+          return error ? `⚠️ ${error}` : null;
+        }}]
         : []),
     ]);
 
