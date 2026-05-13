@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       registrationNumber,
       commissionAmount,
       stage = "New Lead",
+      paymentDate,
       reminderDate,
       releaseDate,
       commissionDueDate,

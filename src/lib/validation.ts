@@ -1,16 +1,16 @@
 // src/lib/validation.ts
 // Shared validation helpers — reuse these across all form components
 
-export function validatePhone(phone: string): string | null {
-  if (!phone) return "Phone number is required";
+export function validatePhone(phone: string | null | undefined): string | null {
+  if (!phone || phone.trim() === "") return "Phone number is required";
   const cleaned = phone.replace(/\s+/g, "");
   if (!/^(\+254|07|01)\d{8,9}$/.test(cleaned))
     return "Enter a valid Kenyan phone number (e.g. 0712 345 678 or +254712345678)";
   return null;
 }
 
-export function validateEmail(email: string): string | null {
-  if (!email) return null; // email is optional in most forms
+export function validateEmail(email: string | null | undefined): string | null {
+  if (!email || email.trim() === "") return null; // email is optional in most forms
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return "Enter a valid email address (e.g. john@email.com)";
   return null;
