@@ -371,7 +371,8 @@ function LeadDrawer({ lead, onClose, onUpdate }: { lead: Lead; onClose: () => vo
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
   const [showReminderForm, setShowReminderForm] = useState(false);
-  const [reminderForm, setReminderForm] = useState({ reminderDate: "", reminderType: "", notes: "" });
+  const today = new Date().toISOString().split("T")[0]; // "MM-DD-YYYY";
+  const [reminderForm, setReminderForm] = useState({ reminderDate: today, reminderType: "", notes: "" });
   const [activeTab, setActiveTab] = useState<"details" | "notes" | "reminders">("details");
   const [showLostReason, setShowLostReason] = useState(false);
   const [lostReason, setLostReason] = useState("");
@@ -382,7 +383,7 @@ function LeadDrawer({ lead, onClose, onUpdate }: { lead: Lead; onClose: () => vo
     depositAmount: lead.depositAmount ? String(lead.depositAmount) : "",
     paymentDate: lead.paymentDate || "",
     balanceRemaining: lead.balanceRemaining ? String(lead.balanceRemaining) : "",
-    reminderDate: lead.reminderDate || "",
+    reminderDate: lead.reminderDate || today,
     releaseDate: lead.releaseDate || "",
     commissionStatus: lead.commissionStatus || "Pending",
     finalNotes: lead.finalNotes || "",
