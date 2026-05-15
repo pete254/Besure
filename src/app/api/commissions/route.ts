@@ -30,35 +30,6 @@ export async function GET(req: NextRequest) {
     const filter = searchParams.get("filter"); // filter type (e.g., "insurer")
     const filterValue = searchParams.get("value"); // filter value (e.g., insurer name)
 
-    let query = db
-      .select({
-        commission: commissions,
-        policy: {
-          id: policies.id,
-          policyNumber: policies.policyNumber,
-          insuranceType: policies.insuranceType,
-          startDate: policies.startDate,
-          endDate: policies.endDate,
-          grandTotal: policies.grandTotal,
-          status: policies.status,
-        },
-        customer: {
-          id: customers.id,
-          firstName: customers.firstName,
-          lastName: customers.lastName,
-          companyName: customers.companyName,
-          customerType: customers.customerType,
-        },
-        insurer: {
-          id: insurers.id,
-          name: insurers.name,
-        },
-      })
-      .from(commissions)
-      .innerJoin(policies, eq(commissions.policyId, policies.id))
-      .innerJoin(customers, eq(commissions.customerId, customers.id))
-      .leftJoin(insurers, eq(commissions.insurerId, insurers.id));
-
     // Build all conditions
     const conditions = [];
 
@@ -94,9 +65,38 @@ export async function GET(req: NextRequest) {
       conditions.push(eq(insurers.name, filterValue));
     }
 
+    let query = db
+      .select({
+        commission: commissions,
+        policy: {
+          id: policies.id,
+          policyNumber: policies.policyNumber,
+          insuranceType: policies.insuranceType,
+          startDate: policies.startDate,
+          endDate: policies.endDate,
+          grandTotal: policies.grandTotal,
+          status: policies.status,
+        },
+        customer: {
+          id: customers.id,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+          companyName: customers.companyName,
+          customerType: customers.customerType,
+        },
+        insurer: {
+          id: insurers.id,
+          name: insurers.name,
+        },
+      })
+      .from(commissions)
+      .innerJoin(policies, eq(commissions.policyId, policies.id))
+      .innerJoin(customers, eq(commissions.customerId, customers.id))
+      .leftJoin(insurers, eq(commissions.insurerId, insurers.id));
+
     // Apply all conditions at once
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      query = (query as any).where(and(...conditions));
     }
 
     const results = await query.orderBy(desc(commissions.expectedDueDate));
