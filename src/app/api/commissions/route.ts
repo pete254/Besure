@@ -210,14 +210,14 @@ export async function POST(req: NextRequest) {
       insurerId: insurerId || null,
       commissionAmount: String(commissionAmount || "0"),
       expectedDueDate: expectedDueDate,
-      notes: parsed.notes,
+      notes: parsed.notes || undefined,
     });
 
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors },
+        { error: error.issues },
         { status: 400 }
       );
     }
