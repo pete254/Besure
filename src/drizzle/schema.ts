@@ -323,6 +323,7 @@ export const policiesRelations = relations(policies, ({ one, many }) => ({
   vehicle: one(vehicles),
   benefits: many(policyBenefits),
   payments: many(payments),
+  commissions: many(commissions),
   documents: many(policyDocuments),
   trackingEntries: many(policyTracking),
   claims: many(claims),
@@ -410,6 +411,41 @@ export const payments = pgTable(
 export const paymentsRelations = relations(payments, ({ one, many }) => ({
   policy: one(policies, { fields: [payments.policyId], references: [policies.id] }),
   notificationLogs: many(notificationLog),
+}));
+
+// ─────────────────────────────────────────────
+// COMMISSIONS (Insurance Policies)
+// ─────────────────────────────────────────────
+
+export const commissions = pgTable(
+  "commissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    policyId: uuid("policy_id").notNull().references(() => policies.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id").notNull().references(() => customers.id),
+    insurerId: uuid("insurer_id").references(() => insurers.id),
+    commissionAmount: numeric("commission_amount", { precision: 14, scale: 2 }).notNull(),
+    expectedDueDate: date("expected_due_date").notNull(),
+    settledDate: date("settled_date"),
+    status: commissionStatusEnum("status").notNull().default("Pending"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    policyIdx: index("commissions_policy_idx").on(t.policyId),
+    customerIdx: index("commissions_customer_idx").on(t.customerId),
+    insurerIdx: index("commissions_insurer_idx").on(t.insurerId),
+    expectedDueDateIdx: index("commissions_expected_due_date_idx").on(t.expectedDueDate),
+    statusIdx: index("commissions_status_idx").on(t.status),
+    settledDateIdx: index("commissions_settled_date_idx").on(t.settledDate),
+  })
+);
+
+export const commissionsRelations = relations(commissions, ({ one }) => ({
+  policy: one(policies, { fields: [commissions.policyId], references: [policies.id] }),
+  customer: one(customers, { fields: [commissions.customerId], references: [customers.id] }),
+  insurer: one(insurers, { fields: [commissions.insurerId], references: [insurers.id] }),
 }));
 
 // ─────────────────────────────────────────────

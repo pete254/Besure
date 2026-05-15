@@ -16,6 +16,7 @@ interface PolicyRow {
     policyNumber?: string | null;
     startDate: string;
     endDate: string;
+    certificateExpiryDate?: string | null;
     grandTotal?: string | null;
     status: string;
     // NEW renewal fields
@@ -187,6 +188,7 @@ const FILTER_LABELS: Record<string, string> = {
   expired: "Expired today",
   overdue: "Overdue payments",
   active: "Active policies",
+  "cert-expiring": "Certificates expiring in 7 days",
   coverType: "Cover type",
   insurer: "Insurer",
   type: "Insurance type",
@@ -199,6 +201,7 @@ export default function PoliciesPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [policyTab, setPolicyTab] = useState<"active" | "pending" | "expired">("active");
+  const [overduePaymentPolicies, setOverduePaymentPolicies] = useState<Set<string>>(new Set());
 
   const filterParam = searchParams.get("filter");
   const filterValue = searchParams.get("value");
@@ -214,40 +217,37 @@ export default function PoliciesPage() {
     }
   }, []);
 
-  useEffect(() => { fetchPolicies(); }, [fetchPolicies]);
+  const fetchOverduePayments = useCallback(async () => {
+    try {
+      const res = await fetch("/api/payments");
+      const data = await res.json();
+      const today = new Date().toISOString().split("T")[0];
+      
+      // Find all payments that are overdue (not paid and due date is in the past)
+      const overduePayments = (data.payments || []).filter(
+        (p: any) => p.status !== "paid" && p.dueDate < today
+      );
+      
+      // Get unique policy IDs from overdue payments
+      const policyIds = new Set<string>(overduePayments.map((p: any) => p.policyId));
+      setOverduePaymentPolicies(policyIds);
+    } catch (error) {
+      console.error("Failed to fetch overdue payments:", error);
+    }
+  }, []);
+
+  useEffect(() => { 
+    fetchPolicies();
+    if (filterParam === "overdue") {
+      fetchOverduePayments();
+    }
+  }, [fetchPolicies, filterParam, fetchOverduePayments]);
 
   // ── Tab classification logic ──
   const today = new Date().toISOString().split("T")[0];
 
-  const activePolicies = rows.filter(r => {
-    const startDate = r.policy.startDate;
-    const endDate = r.policy.endDate;
-    return startDate <= today && endDate >= today;
-  });
-
-  const pendingPolicies = rows.filter(r => {
-    return r.policy.startDate > today;
-  });
-
-  const expiredPolicies = rows.filter(r => {
-    return r.policy.endDate < today;
-  });
-
-  // Sort policies
-  activePolicies.sort((a, b) => a.policy.endDate.localeCompare(b.policy.endDate));
-  expiredPolicies.sort((a, b) => b.policy.endDate.localeCompare(a.policy.endDate));
-  pendingPolicies.sort((a, b) => a.policy.startDate.localeCompare(b.policy.startDate));
-
-  const TAB_CONFIG = [
-    { key: "active" as const, label: "Active", count: activePolicies.length, color: "var(--brand)" },
-    { key: "pending" as const, label: "Pending", count: pendingPolicies.length, color: "#60a5fa" },
-    { key: "expired" as const, label: "Expired", count: expiredPolicies.length, color: "#9ca3af" },
-  ];
-
-  const currentRows = policyTab === "active" ? activePolicies : policyTab === "pending" ? pendingPolicies : expiredPolicies;
-
-  // Apply search filter to current tab
-  let filtered = currentRows.filter((r) => {
+  // STEP 1: Apply search and URL filters to ALL policies FIRST
+  let filtered = rows.filter((r) => {
     if (!search) return true;
     const name = r.customer
       ? r.customer.customerType === "Company"
@@ -263,22 +263,59 @@ export default function PoliciesPage() {
     );
   });
 
-  // Apply URL filters to current tab
+  // Apply URL filters to ALL policies
   if (filterParam === "expiring30") {
     filtered = filtered.filter(r => r.policy.endDate >= today && r.policy.endDate <= new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0] && r.policy.status === "Active");
   } else if (filterParam === "expiring7") {
     filtered = filtered.filter(r => r.policy.endDate >= today && r.policy.endDate <= new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0] && r.policy.status === "Active");
   } else if (filterParam === "expired") {
     filtered = filtered.filter(r => r.policy.endDate < today);
+  } else if (filterParam === "overdue") {
+    filtered = filtered.filter(r => overduePaymentPolicies.has(r.policy.id));
   } else if (filterParam === "active") {
     filtered = filtered.filter(r => r.policy.status === "Active");
+  } else if (filterParam === "cert-expiring") {
+    filtered = filtered.filter(r => {
+      if (!r.policy.certificateExpiryDate) return false;
+      const certExpiryDate = r.policy.certificateExpiryDate;
+      const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
+      return certExpiryDate >= today && certExpiryDate <= in7Days;
+    });
   } else if (filterParam === "coverType" && filterValue) {
     filtered = filtered.filter(r => r.policy.coverType === filterValue);
   } else if (filterParam === "insurer" && filterValue) {
-    filtered = filtered.filter(r => (r.insurer?.name || r.policy.insuranceType) === filterValue);
+    filtered = filtered.filter(r => r.insurer?.name === filterValue);
   } else if (filterParam === "type" && filterValue) {
     filtered = filtered.filter(r => r.policy.insuranceType === filterValue);
   }
+
+  // STEP 2: Now split the filtered results into tabs
+  const activePolicies = filtered.filter(r => {
+    const startDate = r.policy.startDate;
+    const endDate = r.policy.endDate;
+    return startDate <= today && endDate >= today;
+  });
+
+  const pendingPolicies = filtered.filter(r => {
+    return r.policy.startDate > today;
+  });
+
+  const expiredPolicies = filtered.filter(r => {
+    return r.policy.endDate < today;
+  });
+
+  // Sort policies
+  activePolicies.sort((a, b) => a.policy.endDate.localeCompare(b.policy.endDate));
+  expiredPolicies.sort((a, b) => b.policy.endDate.localeCompare(a.policy.endDate));
+  pendingPolicies.sort((a, b) => a.policy.startDate.localeCompare(b.policy.startDate));
+
+  const TAB_CONFIG = [
+    { key: "active" as const, label: "Active", count: activePolicies.length, color: "var(--brand)" },
+    { key: "pending" as const, label: "Pending", count: pendingPolicies.length, color: "#60a5fa" },
+    { key: "expired" as const, label: "Expired", count: expiredPolicies.length, color: "#9ca3af" },
+  ];
+
+  const currentRows = policyTab === "active" ? activePolicies : policyTab === "pending" ? pendingPolicies : expiredPolicies;
 
   const activeFilter = filterParam
     ? filterValue
@@ -367,7 +404,7 @@ export default function PoliciesPage() {
       )}
 
       {/* Policy list */}
-      {filtered.length === 0 ? (
+      {currentRows.length === 0 ? (
         <div style={{ padding: "32px 0", textAlign: "center" }}>
           <p style={{ color: "var(--text-muted)", marginBottom: "12px", fontSize: "14px" }}>
             {search || filterParam ? "No policies match your filter." : "No policies yet."}
@@ -380,7 +417,7 @@ export default function PoliciesPage() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          {filtered.map((row) => (
+          {currentRows.map((row) => (
             <PolicyCard key={row.policy.id} row={row} tab={policyTab} />
           ))}
         </div>

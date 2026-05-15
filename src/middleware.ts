@@ -16,9 +16,10 @@ export default auth((req) => {
   const isCalendarTest = req.nextUrl.pathname.startsWith("/api/calendar/test");
   const isCalendarApi = req.nextUrl.pathname.startsWith("/api/calendar");
   const isCarSalesApi = req.nextUrl.pathname.startsWith("/api/car-sales");
+  const isCommissionsApi = req.nextUrl.pathname.startsWith("/api/commissions");
 
-  // Allow auth routes, cron, migration, blob proxy, debug, drafts, calendar, and car sales endpoints through
-  if (isApiAuth || isCron || isMigrate || isBlobProxy || isBlobDebug || isDraftsApi || isCalendarApi || isCarSalesApi) return NextResponse.next();
+  // Allow auth routes, cron, migration, blob proxy, debug, drafts, calendar, car sales, and commissions endpoints through
+  if (isApiAuth || isCron || isMigrate || isBlobProxy || isBlobDebug || isDraftsApi || isCalendarApi || isCarSalesApi || isCommissionsApi) return NextResponse.next();
 
   // Redirect unauthenticated users to login
   if (!isLoggedIn && !isAuthPage) {

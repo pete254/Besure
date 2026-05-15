@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { policies, customers, vehicles, insurers, policyBenefits, payments, policyDocuments } from "@/drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
+import { calculateAndStoreCommission } from "@/lib/commission";
 
 const createPolicySchema = z.object({
   insuranceType: z.enum([
@@ -316,6 +317,24 @@ export async function POST(req: NextRequest) {
           blobKey: doc.blobKey,
         }))
       );
+    }
+
+    // Generate commission if policy has an insurer with a commission rate
+    try {
+      if (data.insurerId) {
+        const insurer = await db
+          .select({ commissionRate: insurers.commissionRate })
+          .from(insurers)
+          .where(eq(insurers.id, data.insurerId))
+          .then((r) => r[0]);
+
+        if (insurer?.commissionRate) {
+          await calculateAndStoreCommission(newPolicy.id);
+        }
+      }
+    } catch (commissionError) {
+      // Log commission generation error but don't fail policy creation
+      console.warn("Failed to generate commission for policy:", newPolicy.id, commissionError);
     }
 
     return NextResponse.json({ policy: newPolicy }, { status: 201 });

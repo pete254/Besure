@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   FileText, AlertTriangle, Users, TrendingUp, Clock,
   AlertCircle, ChevronRight, RefreshCw, Calendar,
-  DollarSign, Shield, Activity, Building2, User,
+  DollarSign, Shield, Activity, Building2, User, Check,
 } from "lucide-react";
 
 interface DashboardData {
@@ -28,10 +28,12 @@ interface DashboardData {
   claimsByStage: Record<string, number>;
   totalActiveClaims: number;
   claimsNearing30: number;
-  revenueThisMonth: number;
-  revenueYTD: number;
-  commissionThisMonth: number;
+  commissionExpectedThisMonth: number;
+  commissionCollectedThisMonth: number;
+  commissionExpectedYTD: number;
+  commissionCollectedYTD: number;
   overdueTotal: number;
+  overduePoliciesCount: number;
   dueIn7Total: number;
   revenueByInsurer: Record<string, number>;
   monthlyVolume: { month: string; count: number }[];
@@ -443,25 +445,6 @@ export default function DashboardPage() {
   const genderCounts = safeData.genderCounts || {};
   const revenueByInsurer = safeData.revenueByInsurer || {};
 
-  const donutCoverData = [
-    { label: "Comprehensive", value: coverCount["Comprehensive"] || 0, color: "#10b981" },
-    { label: "TPO", value: coverCount["TPO"] || 0, color: "#fbbf24" },
-    { label: "TPFT", value: coverCount["TPFT"] || 0, color: "#60a5fa" },
-  ];
-
-  const donutTypeData = [
-    { label: "Private", value: typeCount["Motor - Private"] || 0, color: "#10b981" },
-    { label: "Commercial", value: typeCount["Motor - Commercial"] || 0, color: "#a78bfa" },
-    { label: "PSV", value: typeCount["Motor - PSV / Matatu"] || 0, color: "#fbbf24" },
-    {
-      label: "Other",
-      value: Object.entries(typeCount)
-        .filter(([k]) => !k.startsWith("Motor"))
-        .reduce((s, [, v]) => s + v, 0),
-      color: "#9ca3af",
-    },
-  ];
-
   // Gender chart is INDIVIDUALS ONLY; companies displayed as separate KPI cards
   const donutGenderData = [
     { label: "Male", value: genderCounts["Male"] || 0, color: "#60a5fa" },
@@ -656,44 +639,60 @@ export default function DashboardPage() {
 
       {/* ── ROW 2: Finance Summary ── */}
       <div>
-        <SectionHeader title="Finance Summary" sub="Revenue and payment overview" />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
-          <KPICard
-            icon={<TrendingUp size={16} color="var(--brand)" />}
-            label="Revenue This Month"
-            value={fmtShort(safeData.revenueThisMonth)}
-            sub="Collected"
-            href="/policies?filter=active"
-            accent="var(--brand)"
-          />
-          <KPICard
-            icon={<DollarSign size={16} color="#a78bfa" />}
-            label="Revenue YTD"
-            value={fmtShort(safeData.revenueYTD)}
-            sub={`${new Date().getFullYear()} total`}
-            href="/policies?filter=active"
-            accent="#a78bfa"
-          />
-          <KPICard
-            icon={<Shield size={16} color="#60a5fa" />}
-            label="Commission (Month)"
-            value={fmtShort(safeData.commissionThisMonth)}
-            sub="Agency earnings"
-            href="/policies?filter=active"
-            accent="#60a5fa"
-          />
-          <KPICard
-            icon={<Clock size={16} color="#f87171" />}
-            label="Overdue Payments"
-            value={fmtShort(safeData.overdueTotal)}
-            sub={`KES ${(safeData.dueIn7Total || 0).toLocaleString("en-KE", {
-              maximumFractionDigits: 0,
-            })} due in 7d`}
-            href="/policies?filter=overdue"
-            alert={safeData.overdueTotal > 0 ? "red" : undefined}
-            accent="#f87171"
-          />
+        <SectionHeader title="Finance Summary" sub="Expected vs Collected commission" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+          {/* This Month */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <KPICard
+              icon={<TrendingUp size={16} color="var(--brand)" />}
+              label="Expected (This Month)"
+              value={fmtShort(safeData.commissionExpectedThisMonth)}
+              sub="Due commissions"
+              href="/commissions"
+              accent="var(--brand)"
+            />
+            <KPICard
+              icon={<Check size={16} color="#10b981" />}
+              label="Collected (This Month)"
+              value={fmtShort(safeData.commissionCollectedThisMonth)}
+              sub="Received"
+              href="/commissions?tab=settled"
+              accent="#10b981"
+            />
+          </div>
+          {/* YTD */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <KPICard
+              icon={<DollarSign size={16} color="#a78bfa" />}
+              label="Expected (YTD)"
+              value={fmtShort(safeData.commissionExpectedYTD)}
+              sub={`${new Date().getFullYear()} total`}
+              href="/commissions"
+              accent="#a78bfa"
+            />
+            <KPICard
+              icon={<Check size={16} color="#34d399" />}
+              label="Collected (YTD)"
+              value={fmtShort(safeData.commissionCollectedYTD)}
+              sub={`${new Date().getFullYear()} received`}
+              href="/commissions?tab=settled"
+              accent="#34d399"
+            />
+          </div>
         </div>
+      </div>
+
+      {/* ── Overdue Payments Section ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px" }}>
+        <KPICard
+          icon={<Clock size={16} color="#f87171" />}
+          label="Overdue Payments"
+          value={`${safeData.overduePoliciesCount} polic${safeData.overduePoliciesCount !== 1 ? "ies" : "y"}`}
+          sub={`KES ${fmtShort(safeData.overdueTotal).replace("KES ", "")} overdue`}
+          href="/policies?filter=overdue"
+          alert={safeData.overdueTotal > 0 ? "red" : undefined}
+          accent="#f87171"
+        />
       </div>
 
       {/* ── ROW 3: Claims + Quick Stats ── */}
@@ -1016,88 +1015,6 @@ export default function DashboardPage() {
             href="/claims?filter=active"
             accent="#a78bfa"
           />
-
-          {/* Cover type donut */}
-          <div
-            style={{
-              backgroundColor: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: "10px",
-              padding: "14px 16px",
-            }}
-          >
-            <p
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                color: "var(--text-muted)",
-                marginBottom: "10px",
-              }}
-            >
-              Cover Type Split — click to filter
-            </p>
-            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-              <DonutChart segments={donutCoverData} size={72} />
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "5px", flex: 1 }}
-              >
-                {donutCoverData.map((d) => (
-                  <Link
-                    key={d.label}
-                    href={`/policies?filter=coverType&value=${encodeURIComponent(d.label)}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      textDecoration: "none",
-                      padding: "3px 6px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.1s",
-                    }}
-                    onMouseEnter={(e) =>
-                      ((e.currentTarget as HTMLElement).style.backgroundColor =
-                        "var(--bg-hover)")
-                    }
-                    onMouseLeave={(e) =>
-                      ((e.currentTarget as HTMLElement).style.backgroundColor =
-                        "transparent")
-                    }
-                  >
-                    <div
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "2px",
-                        backgroundColor: d.color,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--text-secondary)",
-                        flex: 1,
-                      }}
-                    >
-                      {d.label}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        color: "var(--text-primary)",
-                      }}
-                    >
-                      {d.value}
-                    </span>
-                    <ChevronRight size={10} color="var(--text-muted)" />
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1232,123 +1149,9 @@ export default function DashboardPage() {
               }}
             >
               {donutGenderData.map((d) => (
-                <div
-                  key={d.label}
-                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
-                >
-                  <div
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "2px",
-                      backgroundColor: d.color,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: "12px",
-                      color: "var(--text-secondary)",
-                      flex: 1,
-                    }}
-                  >
-                    {d.label}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {d.value}
-                  </span>
-                </div>
-              ))}
-              {/* Company row – shown separately, not in the gender donut */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  marginTop: "4px",
-                  paddingTop: "6px",
-                  borderTop: "1px solid var(--border)",
-                }}
-              >
-                <Building2 size={10} color="#a78bfa" style={{ flexShrink: 0 }} />
-                <span
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--text-secondary)",
-                    flex: 1,
-                  }}
-                >
-                  Companies
-                </span>
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    color: "#a78bfa",
-                  }}
-                >
-                  {safeData.totalCompanies ?? 0}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Policy type donut */}
-        <div
-          style={{
-            backgroundColor: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            borderRadius: "10px",
-            padding: "18px",
-          }}
-        >
-          <p
-            style={{
-              fontSize: "13px",
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              marginBottom: "14px",
-            }}
-          >
-            Policies by Type —{" "}
-            <span
-              style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 400 }}
-            >
-              click to filter
-            </span>
-          </p>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "14px",
-            }}
-          >
-            <DonutChart segments={donutTypeData} size={96} />
-            <div
-              style={{
-                width: "100%",
-                display: "flex",
-                flexDirection: "column",
-                gap: "5px",
-              }}
-            >
-              {[
-                { label: "Private", type: "Motor - Private", color: "#10b981" },
-                { label: "Commercial", type: "Motor - Commercial", color: "#a78bfa" },
-                { label: "PSV", type: "Motor - PSV / Matatu", color: "#fbbf24" },
-              ].map((d) => (
                 <Link
                   key={d.label}
-                  href={`/policies?filter=type&value=${encodeURIComponent(d.type)}`}
+                  href={`/customers?filter=gender&value=${encodeURIComponent(d.label)}`}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1392,12 +1195,158 @@ export default function DashboardPage() {
                       color: "var(--text-primary)",
                     }}
                   >
-                    {typeCount[d.type] || 0}
+                    {d.value}
                   </span>
-                  <ChevronRight size={10} color="var(--text-muted)" />
                 </Link>
               ))}
+              {/* Company row – shown separately, not in the gender donut */}
+              <Link
+                href="/customers?filter=customerType&value=Company"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  marginTop: "4px",
+                  paddingTop: "6px",
+                  paddingLeft: "3px",
+                  paddingRight: "3px",
+                  paddingBottom: "3px",
+                  borderTop: "1px solid var(--border)",
+                  borderRadius: "4px",
+                  textDecoration: "none",
+                  transition: "background-color 0.1s",
+                }}
+                onMouseEnter={(e) =>
+                  ((e.currentTarget as HTMLElement).style.backgroundColor =
+                    "var(--bg-hover)")
+                }
+                onMouseLeave={(e) =>
+                  ((e.currentTarget as HTMLElement).style.backgroundColor =
+                    "transparent")
+                }
+              >
+                <Building2 size={10} color="#a78bfa" style={{ flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                    flex: 1,
+                  }}
+                >
+                  Companies
+                </span>
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: "#a78bfa",
+                  }}
+                >
+                  {safeData.totalCompanies ?? 0}
+                </span>
+              </Link>
             </div>
+          </div>
+        </div>
+
+        {/* Insurance Type */}
+        <div
+          style={{
+            backgroundColor: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            padding: "18px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: "13px",
+              fontWeight: 700,
+              color: "var(--text-primary)",
+              marginBottom: "14px",
+            }}
+          >
+            Insurance Type —{" "}
+            <span
+              style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 400 }}
+            >
+              click to filter
+            </span>
+          </p>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "5px",
+            }}
+          >
+            {Object.entries(typeCount)
+              .sort((a, b) => b[1] - a[1])
+              .map(([type, count]) => (
+                <Link
+                  key={type}
+                  href={`/policies?filter=type&value=${encodeURIComponent(type)}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    textDecoration: "none",
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    transition: "all 0.15s",
+                    border: "1px solid transparent",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor =
+                      "var(--bg-hover)";
+                    (e.currentTarget as HTMLElement).style.borderColor =
+                      "var(--brand)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor =
+                      "transparent";
+                    (e.currentTarget as HTMLElement).style.borderColor =
+                      "transparent";
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "13px",
+                      color: "var(--text-secondary)",
+                      flex: 1,
+                    }}
+                  >
+                    {type}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "var(--brand)",
+                      backgroundColor: "rgba(59, 130, 246, 0.1)",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      minWidth: "32px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {count}
+                  </span>
+                  <ChevronRight size={14} color="var(--text-muted)" />
+                </Link>
+              ))}
+            {Object.entries(typeCount).length === 0 && (
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--text-secondary)",
+                  textAlign: "center",
+                  padding: "20px 10px",
+                }}
+              >
+                No insurance types yet
+              </p>
+            )}
           </div>
         </div>
 
@@ -1452,7 +1401,7 @@ export default function DashboardPage() {
                 return (
                   <Link
                     key={c.county}
-                    href={`/customers?search=${encodeURIComponent(c.county)}`}
+                    href={`/customers?filter=county&value=${encodeURIComponent(c.county)}`}
                     style={{
                       textDecoration: "none",
                       display: "block",
@@ -1535,7 +1484,7 @@ export default function DashboardPage() {
               marginBottom: "4px",
             }}
           >
-            Revenue by Insurer
+            Commission by Insurer
           </p>
           <p
             style={{
@@ -1544,18 +1493,18 @@ export default function DashboardPage() {
               marginBottom: "16px",
             }}
           >
-            Click an insurer to view its policies
+            Click an insurer to view its commissions
           </p>
           {revenueByInsurerArr.length === 0 ? (
             <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              No revenue data yet.
+              No commission data yet.
             </p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {revenueByInsurerArr.map(([name, rev], i) => (
                 <Link
                   key={name}
-                  href={`/policies?filter=insurer&value=${encodeURIComponent(name)}`}
+                  href={`/commissions?filter=insurer&value=${encodeURIComponent(name)}`}
                   style={{
                     textDecoration: "none",
                     display: "block",

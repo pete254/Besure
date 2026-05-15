@@ -14,6 +14,7 @@ import {
   Settings,
   Activity,
   Car,
+  DollarSign,
 } from "lucide-react";
 
 const navigation = [
@@ -37,6 +38,7 @@ const navigation = [
     label: "Finance",
     items: [
       { name: "Calculator", href: "/calculator", icon: Calculator },
+      { name: "Commissions", href: "/commissions", icon: DollarSign },
       { name: "Reports",    href: "/reports",    icon: BarChart3 },
     ],
   },

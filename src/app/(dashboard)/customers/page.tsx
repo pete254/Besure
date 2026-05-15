@@ -3,6 +3,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search, Plus, User, Building2, ChevronRight, Trash2, X, AlertTriangle } from "lucide-react";
 
@@ -15,16 +16,23 @@ interface Customer {
   email?: string | null;
   idNumber?: string | null;
   county?: string | null;
+  gender?: string | null;
   customerType: "Individual" | "Company";
   companyName?: string | null;
   createdAt: string;
 }
 
 export default function CustomersPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Get filter params from URL
+  const filterParam = searchParams.get("filter");
+  const filterValue = searchParams.get("value");
 
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
@@ -41,6 +49,8 @@ export default function CustomersPage() {
     try {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
+      if (filterParam) params.set("filter", filterParam);
+      if (filterValue) params.set("value", filterValue);
       const res = await fetch(`/api/customers?${params}`);
       const data = await res.json();
       setCustomers(data.customers || []);
@@ -49,7 +59,7 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch]);
+  }, [debouncedSearch, filterParam, filterValue]);
 
   useEffect(() => {
     fetchCustomers();
@@ -124,6 +134,36 @@ export default function CustomersPage() {
           onBlur={(e) => ((e.target as HTMLElement).style.borderColor = "var(--border)")}
         />
       </div>
+
+      {/* Active Filter Badge */}
+      {filterParam && filterValue && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 12px", backgroundColor: "var(--brand-dim)", border: "1px solid var(--brand)", borderRadius: "8px" }}>
+          <span style={{ fontSize: "12px", color: "var(--text-primary)" }}>
+            <strong>Filter:</strong> {filterParam === "gender" ? "Gender" : filterParam === "county" ? "County" : "Type"} = <strong>{filterValue}</strong>
+          </span>
+          <button
+            onClick={() => router.push("/customers")}
+            style={{
+              marginLeft: "auto",
+              display: "flex", alignItems: "center", gap: "4px",
+              padding: "4px 8px", backgroundColor: "transparent",
+              border: "1px solid var(--brand)", borderRadius: "4px",
+              color: "var(--brand)", fontSize: "11px", fontWeight: 600,
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = "var(--brand)";
+              (e.currentTarget as HTMLElement).style.color = "#000000";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+              (e.currentTarget as HTMLElement).style.color = "var(--brand)";
+            }}
+          >
+            <X size={12} /> Clear
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>

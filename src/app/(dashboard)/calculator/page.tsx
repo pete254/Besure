@@ -78,9 +78,9 @@ function getBenefitGroup(insuranceType: string): "private" | "commercial" | "med
   return "none";
 }
 
-function fmt(n: number, currency = true) {
-  if (isNaN(n) || n === 0) return currency ? "KES 0.00" : "0.00";
-  const formatted = n.toLocaleString("en-KE", { minimumFractionDigits: 2 });
+function fmt(n: number | null | undefined, currency = true) {
+  if (!n || isNaN(Number(n)) || n === 0) return currency ? "KES 0.00" : "0.00";
+  const formatted = Number(n).toLocaleString("en-KE", { minimumFractionDigits: 2 });
   return currency ? `KES ${formatted}` : formatted;
 }
 

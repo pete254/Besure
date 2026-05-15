@@ -9,6 +9,7 @@ import {
   customers,
   insurers,
   drafts,
+  commissions,
 } from "@/drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -27,6 +28,9 @@ export async function GET() {
 
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const startOfMonthStr = startOfMonth.toISOString().split("T")[0];
+
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const endOfMonthStr = endOfMonth.toISOString().split("T")[0];
 
     const startOfYear = new Date(today.getFullYear(), 0, 1);
     const startOfYearStr = startOfYear.toISOString().split("T")[0];
@@ -82,6 +86,10 @@ export async function GET() {
         sum + (parseFloat(p.amountDue) - parseFloat(p.amountPaid || "0")),
       0
     );
+    
+    // Count unique policies with overdue payments
+    const overduePaymentPolicies = new Set(overduePayments.map(p => p.policyId));
+    const overduePoliciesCount = overduePaymentPolicies.size;
 
     const dueIn7Days = allPayments.filter(
       (p) =>
@@ -95,38 +103,62 @@ export async function GET() {
       0
     );
 
-    const revenueThisMonth = allPayments
-      .filter((p) => p.paidDate && p.paidDate >= startOfMonthStr)
-      .reduce((sum, p) => sum + parseFloat(p.amountPaid || "0"), 0);
+    // ── Commissions ─────────────────────────────────────────────
+    const allCommissions = await db.select().from(commissions);
+    
+    // Expected: commissions with expectedDueDate in period
+    const commissionsExpectedThisMonth = allCommissions.filter((c) => {
+      const dueDate = c.expectedDueDate as any;
+      const dueDateStr = typeof dueDate === 'string' ? dueDate : new Date(dueDate).toISOString().split("T")[0];
+      return dueDateStr >= startOfMonthStr && dueDateStr < endOfMonthStr;
+    });
+    const commissionExpectedThisMonth = commissionsExpectedThisMonth.reduce(
+      (sum, c) => sum + parseFloat(c.commissionAmount || "0"), 0
+    );
 
-    const revenueYTD = allPayments
-      .filter((p) => p.paidDate && p.paidDate >= startOfYearStr)
-      .reduce((sum, p) => sum + parseFloat(p.amountPaid || "0"), 0);
+    // Collected: commissions actually settled/paid in period
+    const commissionsCollectedThisMonth = allCommissions.filter((c) => {
+      if (!c.settledDate) return false;
+      const settledDate = c.settledDate as any;
+      const settledDateStr = typeof settledDate === 'string' ? settledDate : new Date(settledDate).toISOString().split("T")[0];
+      return settledDateStr >= startOfMonthStr && settledDateStr < endOfMonthStr;
+    });
+    const commissionCollectedThisMonth = commissionsCollectedThisMonth.reduce(
+      (sum, c) => sum + parseFloat(c.commissionAmount || "0"), 0
+    );
 
-    // ── Insurers / commission ────────────────────────────────────
+    // YTD Expected
+    const commissionsExpectedYTD = allCommissions.filter((c) => {
+      const dueDate = c.expectedDueDate as any;
+      const dueDateStr = typeof dueDate === 'string' ? dueDate : new Date(dueDate).toISOString().split("T")[0];
+      return dueDateStr >= startOfYearStr;
+    });
+    const commissionExpectedYTD = commissionsExpectedYTD.reduce(
+      (sum, c) => sum + parseFloat(c.commissionAmount || "0"), 0
+    );
+
+    // YTD Collected
+    const commissionsCollectedYTD = allCommissions.filter((c) => {
+      if (!c.settledDate) return false;
+      const settledDate = c.settledDate as any;
+      const settledDateStr = typeof settledDate === 'string' ? settledDate : new Date(settledDate).toISOString().split("T")[0];
+      return settledDateStr >= startOfYearStr;
+    });
+    const commissionCollectedYTD = commissionsCollectedYTD.reduce(
+      (sum, c) => sum + parseFloat(c.commissionAmount || "0"), 0
+    );
+
+    // ── Insurers ────────────────────────────────────────────────
     const allInsurers = await db.select().from(insurers);
     const insurerMap = Object.fromEntries(allInsurers.map((i) => [i.id, i]));
 
-    const policiesThisMonth = allPolicies.filter(
-      (p) => p.createdAt.toISOString().split("T")[0] >= startOfMonthStr
-    );
-    const commissionThisMonth = policiesThisMonth.reduce((sum, p) => {
-      if (!p.insurerId || !p.grandTotal) return sum;
-      const ins = insurerMap[p.insurerId];
-      const rate = parseFloat(ins?.commissionRate || "0") / 100;
-      return sum + parseFloat(p.grandTotal) * rate;
-    }, 0);
-
     const revenueByInsurer: Record<string, number> = {};
-    for (const p of allPolicies) {
-      const insurerName = p.insurerId
-        ? insurerMap[p.insurerId]?.name || "Unknown"
-        : p.insurerNameManual || "Manual";
-      const paid = allPayments
-        .filter((pay) => pay.policyId === p.id)
-        .reduce((s, pay) => s + parseFloat(pay.amountPaid || "0"), 0);
+    for (const c of allCommissions) {
+      if (!c.insurerId) continue;
+      const insurerName = insurerMap[c.insurerId]?.name || "Unknown";
+      const commissionAmount = parseFloat(c.commissionAmount || "0");
       revenueByInsurer[insurerName] =
-        (revenueByInsurer[insurerName] || 0) + paid;
+        (revenueByInsurer[insurerName] || 0) + commissionAmount;
     }
 
     // ── Monthly policy volume ────────────────────────────────────
@@ -138,8 +170,8 @@ export async function GET() {
       const monthEnd = nextMonth.toISOString().split("T")[0];
       const count = allPolicies.filter(
         (p) =>
-          p.createdAt.toISOString().split("T")[0] >= monthStart &&
-          p.createdAt.toISOString().split("T")[0] < monthEnd
+          p.startDate >= monthStart &&
+          p.startDate < monthEnd
       ).length;
       monthlyVolume.push({
         month: d.toLocaleString("en-KE", { month: "short", year: "2-digit" }),
@@ -313,10 +345,12 @@ export async function GET() {
       claimsNearing30,
 
       // Finance
-      revenueThisMonth,
-      revenueYTD,
-      commissionThisMonth,
+      commissionExpectedThisMonth,
+      commissionCollectedThisMonth,
+      commissionExpectedYTD,
+      commissionCollectedYTD,
       overdueTotal,
+      overduePoliciesCount,
       dueIn7Total,
       revenueByInsurer,
 

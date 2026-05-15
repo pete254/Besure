@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { customers } from "@/drizzle/schema";
-import { ilike, or, desc } from "drizzle-orm";
+import { ilike, or, desc, eq, and } from "drizzle-orm";
 import { z } from "zod";
 
 const createCustomerSchema = z.object({
@@ -49,43 +49,58 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") || "";
+    const filterType = searchParams.get("filter");
+    const filterValue = searchParams.get("value");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
     const offset = (page - 1) * limit;
 
-    const results = search
-      ? await db
-          .select()
-          .from(customers)
-          .where(
-            or(
-              // Individual fields
-              ilike(customers.firstName, `%${search}%`),
-              ilike(customers.lastName, `%${search}%`),
-              ilike(customers.phone, `%${search}%`),
-              ilike(customers.idNumber, `%${search}%`),
-              ilike(customers.idNumberValue, `%${search}%`),
-              ilike(customers.county, `%${search}%`),
-              ilike(customers.email, `%${search}%`),
-              // Company fields
-              ilike(customers.companyName, `%${search}%`),
-              ilike(customers.companyPhone, `%${search}%`),
-              ilike(customers.companyEmail, `%${search}%`),
-              // Company documents – searchable by cert/CR12/KRA values
-              ilike(customers.certOfIncorporationValue, `%${search}%`),
-              ilike(customers.cr12Value, `%${search}%`),
-              ilike(customers.companyKraPinValue, `%${search}%`),
-            )
-          )
-          .orderBy(desc(customers.createdAt))
-          .limit(limit)
-          .offset(offset)
-      : await db
-          .select()
-          .from(customers)
-          .orderBy(desc(customers.createdAt))
-          .limit(limit)
-          .offset(offset);
+    // Build conditions array
+    const conditions: any[] = [];
+
+    // Add search condition
+    if (search) {
+      conditions.push(
+        or(
+          // Individual fields
+          ilike(customers.firstName, `%${search}%`),
+          ilike(customers.lastName, `%${search}%`),
+          ilike(customers.phone, `%${search}%`),
+          ilike(customers.idNumber, `%${search}%`),
+          ilike(customers.idNumberValue, `%${search}%`),
+          ilike(customers.county, `%${search}%`),
+          ilike(customers.email, `%${search}%`),
+          // Company fields
+          ilike(customers.companyName, `%${search}%`),
+          ilike(customers.companyPhone, `%${search}%`),
+          ilike(customers.companyEmail, `%${search}%`),
+          // Company documents – searchable by cert/CR12/KRA values
+          ilike(customers.certOfIncorporationValue, `%${search}%`),
+          ilike(customers.cr12Value, `%${search}%`),
+          ilike(customers.companyKraPinValue, `%${search}%`),
+        )
+      );
+    }
+
+    // Add filter conditions
+    if (filterType === "gender" && filterValue && ["Male", "Female", "Other"].includes(filterValue)) {
+      conditions.push(eq(customers.gender, filterValue as "Male" | "Female" | "Other"));
+    } else if (filterType === "county" && filterValue) {
+      conditions.push(eq(customers.county, filterValue));
+    } else if (filterType === "customerType" && filterValue && ["Individual", "Company"].includes(filterValue)) {
+      conditions.push(eq(customers.customerType, filterValue as "Individual" | "Company"));
+    }
+
+    // Build query with all conditions using and()
+    const query = db
+      .select()
+      .from(customers)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(customers.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const results = await query;
 
     return NextResponse.json({ customers: results, page, limit });
   } catch (error) {

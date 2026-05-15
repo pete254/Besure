@@ -191,7 +191,7 @@ export function LeadDetailsModal({ lead, onClose, onUpdate }: LeadDetailsModalPr
       });
 
       if (response.ok) {
-        setNewReminderDate("");
+        setNewReminderDate(new Date().toISOString().split('T')[0]);
         setNewReminderType("");
         setNewReminderNotes("");
         fetchReminders();
