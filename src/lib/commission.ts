@@ -207,6 +207,7 @@ export async function regenerateAllCommissions() {
     .where(
       and(
         eq(policies.status, "Active"),
+        isNotNull(policies.customerId), // Customer must exist
         isNotNull(policies.insurerId) // Insurer must exist
       )
     );
