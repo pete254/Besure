@@ -7,7 +7,7 @@ import {
   Plus, Car, Phone, Mail, DollarSign, Calendar, Building2,
   AlertCircle, ChevronRight, X, Check, MessageSquare,
   Bell, TrendingUp, Loader2, Search, MoreHorizontal,
-  RefreshCw, Edit3, Trash2, AlarmClock, Ban, Users,
+  RefreshCw, Edit3, Trash2, AlarmClock, Ban, Users, BarChart2,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1006,6 +1006,345 @@ function StageColumn({ stage, leads, onLeadClick }: { stage: string; leads: Lead
   );
 }
 
+// ─── Stage Bar Chart ──────────────────────────────────────────────────────────
+
+function StageChart({ data }: { data: { stage: string; count: number; color: string }[] }) {
+  const max = Math.max(...data.map(d => d.count), 1);
+  const chartHeight = 180;
+  
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* Bar chart */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", height: chartHeight }}>
+        {data.map((d) => (
+          <div
+            key={d.stage}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "6px",
+              height: "100%",
+              justifyContent: "flex-end",
+            }}
+            title={`${d.stage}: ${d.count}`}
+          >
+            <div
+              style={{
+                width: "100%",
+                backgroundColor: d.color,
+                borderRadius: "4px 4px 0 0",
+                opacity: d.count === 0 ? 0.15 : 0.85,
+                height: `${(d.count / max) * 100}%`,
+                minHeight: d.count > 0 ? "3px" : "0",
+              }}
+            />
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: 600,
+                color: "var(--text-secondary)",
+                textAlign: "center",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "100%",
+              }}
+            >
+              {d.count}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Stage labels */}
+      <div style={{ display: "flex", gap: "8px", justifyContent: "space-between" }}>
+        {data.map((d) => (
+          <div
+            key={d.stage}
+            style={{
+              flex: 1,
+              fontSize: "11px",
+              fontWeight: 600,
+              color: d.color,
+              textAlign: "center",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {d.stage}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Monthly Chart (Bar + Line) ───────────────────────────────────────────────
+
+function MonthlyChart({ data }: { data: { month: string; leads: number; released: number }[] }) {
+  if (data.length === 0) {
+    return <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px", fontSize: "12px" }}>No data available</div>;
+  }
+
+  const maxLeads = Math.max(...data.map(d => d.leads), 1);
+  const maxReleased = Math.max(...data.map(d => d.released), 1);
+  const maxValue = Math.max(maxLeads, maxReleased);
+  const chartHeight = 140;
+  
+  // Calculate bar positions
+  const barWidth = 100 / data.length;
+  
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ position: "relative", height: chartHeight, marginBottom: "20px" }}>
+        {/* SVG overlay for line chart */}
+        <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+          {/* Grid lines */}
+          {[0, 0.25, 0.5, 0.75, 1].map((y, i) => (
+            <line
+              key={`grid-${i}`}
+              x1="0"
+              y1={`${y * 100}%`}
+              x2="100%"
+              y2={`${y * 100}%`}
+              stroke="var(--border)"
+              strokeDasharray="4,4"
+              opacity="0.3"
+            />
+          ))}
+          
+          {/* Released line */}
+          <polyline
+            points={data
+              .map((d, i) => {
+                const x = (i + 0.5) * barWidth;
+                const y = 100 - ((d.released / maxValue) * 100);
+                return `${x}%,${y}%`;
+              })
+              .join(" ")}
+            fill="none"
+            stroke="#10b981"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+          
+          {/* Released dots */}
+          {data.map((d, i) => {
+            const x = (i + 0.5) * barWidth;
+            const y = 100 - ((d.released / maxValue) * 100);
+            return (
+              <circle
+                key={`dot-${i}`}
+                cx={`${x}%`}
+                cy={`${y}%`}
+                r="2.5"
+                fill="#10b981"
+                stroke="#fff"
+                strokeWidth="1"
+              />
+            );
+          })}
+        </svg>
+
+        {/* Bars */}
+        <div style={{ display: "flex", alignItems: "flex-end", height: "100%", gap: "2px" }}>
+          {data.map((d, i) => (
+            <div
+              key={d.month}
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: "2px",
+                height: "100%",
+                position: "relative",
+                minHeight: "20px",
+              }}
+              title={`${d.month}: ${d.leads} leads, ${d.released} released`}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  backgroundColor: "#60a5fa",
+                  borderRadius: "3px 3px 0 0",
+                  opacity: d.leads === 0 ? 0.15 : 0.7,
+                  height: `${(d.leads / maxValue) * 100}%`,
+                  minHeight: d.leads > 0 ? "2px" : "0",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend and labels */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "11px", flexWrap: "wrap", gap: "12px" }}>
+        <div style={{ display: "flex", gap: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{ width: "12px", height: "12px", backgroundColor: "#60a5fa", borderRadius: "2px" }} />
+            <span style={{ color: "var(--text-secondary)" }}>Leads Created</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{ width: "12px", height: "2px", backgroundColor: "#10b981" }} />
+            <span style={{ color: "var(--text-secondary)" }}>Releases</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Month labels */}
+      <div style={{ display: "flex", gap: "2px" }}>
+        {data.map(d => (
+          <div
+            key={d.month}
+            style={{
+              flex: 1,
+              textAlign: "center",
+              fontSize: "9px",
+              color: "var(--text-muted)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {d.month}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Analytics Drawer ─────────────────────────────────────────────────────────
+
+function AnalyticsDrawer({ pipeline, onClose }: { pipeline: PipelineData; onClose: () => void }) {
+  // Calculate stage data
+  const stageData = [
+    { stage: "New Lead", count: (pipeline["New Lead"] || []).length, color: "#60a5fa" },
+    { stage: "Follow Up", count: (pipeline["Follow Up"] || []).length, color: "#fbbf24" },
+    { stage: "Hot Prospect", count: (pipeline["Hot Prospect"] || []).length, color: "#fb923c" },
+    { stage: "Deposit Paid", count: (pipeline["Deposit Paid"] || []).length, color: "#a78bfa" },
+    { stage: "Released", count: (pipeline["Released"] || []).length, color: "#10b981" },
+  ];
+  
+  const totalLeads = Object.values(pipeline).flat().length;
+  const releasedCount = (pipeline["Released"] || []).length;
+  const conversionRate = totalLeads > 0 ? ((releasedCount / totalLeads) * 100).toFixed(1) : 0;
+  const lostCancelled = (pipeline["Lost"] || []).length + (pipeline["Cancelled"] || []).length;
+
+  // Calculate monthly data (last 12 months)
+  const monthlyData: { month: string; leads: number; released: number }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date();
+    date.setMonth(date.getMonth() - i);
+    const monthKey = date.toLocaleDateString("en-KE", { month: "short", year: "2-digit" });
+    const year = date.getFullYear();
+    const month = date.getMonth();
+
+    const leadsInMonth = Object.values(pipeline)
+      .flat()
+      .filter(l => {
+        const createdDate = new Date(l.createdAt);
+        return createdDate.getFullYear() === year && createdDate.getMonth() === month;
+      }).length;
+
+    const releasedInMonth = (pipeline["Released"] || [])
+      .filter(l => {
+        if (!l.releaseDate) return false;
+        const releaseDate = new Date(l.releaseDate);
+        return releaseDate.getFullYear() === year && releaseDate.getMonth() === month;
+      }).length;
+
+    monthlyData.push({ month: monthKey, leads: leadsInMonth, released: releasedInMonth });
+  }
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {/* Backdrop */}
+      <div style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onClick={onClose} />
+
+      {/* Drawer */}
+      <div style={{ width: "520px", backgroundColor: "var(--bg-sidebar)", borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }}>
+        {/* Header */}
+        <div style={{ padding: "20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff", margin: 0 }}>Analytics</h3>
+            <BarChart2 size={16} color="#06b6d4" />
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "24px", padding: "20px", overflowY: "auto" }}>
+          {/* Stage Chart Section */}
+          <div>
+            <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", margin: "0 0 14px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Leads by Stage
+            </h4>
+            <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
+              <StageChart data={stageData} />
+              
+              {/* Lost/Cancelled count */}
+              {lostCancelled > 0 && (
+                <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid var(--border)", padding: "12px", backgroundColor: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: "6px" }}>
+                  <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>Lost / Cancelled</p>
+                  <p style={{ fontSize: "18px", fontWeight: 700, color: "#f87171", margin: 0 }}>{lostCancelled}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Monthly Chart Section */}
+          <div>
+            <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", margin: "0 0 14px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Monthly Conversion
+            </h4>
+            <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
+              <MonthlyChart data={monthlyData} />
+            </div>
+          </div>
+
+          {/* Summary stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            {[
+              { label: "Total Leads", value: totalLeads, color: "var(--brand)" },
+              { label: "Conversion Rate", value: `${conversionRate}%`, color: "#10b981" },
+            ].map((stat, idx) => (
+              <div
+                key={idx}
+                style={{
+                  backgroundColor: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  padding: "14px",
+                  textAlign: "center",
+                }}
+              >
+                <p style={{ fontSize: "11px", color: "var(--text-secondary)", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {stat.label}
+                </p>
+                <p style={{ fontSize: "22px", fontWeight: 800, color: stat.color, margin: 0 }}>{stat.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CarSalesPipelinePage() {
@@ -1018,6 +1357,7 @@ export default function CarSalesPipelinePage() {
   const [activeStages, setActiveStages] = useState<string[]>(STAGES.filter(s => !["Lost", "Cancelled"].includes(s)));
   const [showAllStages, setShowAllStages] = useState(false);
   const [viewFilteredDetails, setViewFilteredDetails] = useState<string | null>(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const fetchPipeline = useCallback(async () => {
     try {
@@ -1103,12 +1443,13 @@ export default function CarSalesPipelinePage() {
       </div>
 
       {/* Summary KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px", flexShrink: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "10px", flexShrink: 0 }}>
         {[
           { id: "active", label: "Active Pipeline", value: activeLeadsCount, color: "var(--brand)", icon: <TrendingUp size={14} color="var(--brand)" /> },
           { id: "released", label: "Released This Month", value: releasedThisMonth, color: "#a78bfa", icon: <Check size={14} color="#a78bfa" /> },
           { id: "commission", label: "Commission Pending", value: fmtKES(pendingCommissionTotal), color: "#fbbf24", icon: <DollarSign size={14} color="#fbbf24" /> },
           { id: "lost", label: "Lost / Cancelled", value: ((pipeline["Lost"] || []).length + (pipeline["Cancelled"] || []).length), color: "#9ca3af", icon: <X size={14} color="#9ca3af" /> },
+          { id: "analytics", label: "Analytics", value: "View", color: "#06b6d4", icon: <BarChart2 size={14} color="#06b6d4" /> },
           { id: "customers", label: "Customers", value: "Manage", color: "#06b6d4", icon: <Users size={14} color="#06b6d4" /> },
           { id: "calendar", label: "Reminders & Calendar", value: "View", color: "#ec4899", icon: <Calendar size={14} color="#ec4899" /> },
         ].map(kpi => (
@@ -1119,6 +1460,8 @@ export default function CarSalesPipelinePage() {
                 router.push("/car-sales/customers");
               } else if (kpi.id === "calendar") {
                 router.push("/car-sales/calendar");
+              } else if (kpi.id === "analytics") {
+                setShowAnalytics(true);
               } else {
                 setViewFilteredDetails(kpi.id);
               }
@@ -1133,7 +1476,7 @@ export default function CarSalesPipelinePage() {
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = kpi.id === "calendar" ? "#ec4899" : (kpi.id === "customers" ? "#06b6d4" : (kpi.id === "active" ? "var(--brand)" : kpi.id === "released" ? "#a78bfa" : kpi.id === "commission" ? "#fbbf24" : "#9ca3af"));
+              (e.currentTarget as HTMLElement).style.borderColor = kpi.id === "calendar" ? "#ec4899" : (kpi.id === "customers" || kpi.id === "analytics" ? "#06b6d4" : (kpi.id === "active" ? "var(--brand)" : kpi.id === "released" ? "#a78bfa" : kpi.id === "commission" ? "#fbbf24" : "#9ca3af"));
               (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
             }}
             onMouseLeave={(e) => {
@@ -1208,6 +1551,13 @@ export default function CarSalesPipelinePage() {
           lead={selectedLead}
           onClose={() => setSelectedLead(null)}
           onUpdate={() => { fetchPipeline(); setSelectedLead(null); }}
+        />
+      )}
+
+      {showAnalytics && (
+        <AnalyticsDrawer
+          pipeline={pipeline}
+          onClose={() => setShowAnalytics(false)}
         />
       )}
 
