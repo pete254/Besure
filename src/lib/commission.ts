@@ -195,7 +195,7 @@ export async function regenerateAllCommissions() {
   const allPolicies = await db
     .select({
       id: policies.id,
-      customerId: customers.id,
+      customerId: policies.customerId,
       insurerId: insurers.id,
       grandTotal: policies.grandTotal,
       startDate: policies.startDate,
