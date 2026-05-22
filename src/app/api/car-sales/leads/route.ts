@@ -83,10 +83,10 @@ export async function POST(request: NextRequest) {
         carType,
         registrationNumber,
         commissionAmount: commissionAmount || null,
-        paymentDate: paymentDate || today,
-        reminderDate: reminderDate || today,
-        releaseDate: releaseDate || today,
-        commissionDueDate: commissionDueDate || today,
+        paymentDate: paymentDate || null,
+        reminderDate: reminderDate || null,
+        releaseDate: releaseDate || null,
+        commissionDueDate: commissionDueDate || null,
         followUpNotes: followUpNotes || null,
       })
       .returning();
