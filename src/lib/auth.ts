@@ -58,6 +58,41 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      // Only restrict Google sign-ins
+      if (account?.provider === "google" && user.email) {
+        // Get whitelisted emails from environment variable
+        const whitelistedEmails = process.env.GOOGLE_WHITELIST_EMAILS?.split(",").map(e => e.trim().toLowerCase()) || [];
+        
+        // If whitelist is configured, check if email is allowed
+        if (whitelistedEmails.length > 0) {
+          const isWhitelisted = whitelistedEmails.includes(user.email.toLowerCase());
+          if (!isWhitelisted) {
+            console.warn(`Blocked Google login attempt from non-whitelisted email: ${user.email}`);
+            return false; // Deny access
+          }
+        }
+
+        // Check if user exists in database
+        const [existingUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, user.email))
+          .limit(1);
+
+        if (!existingUser) {
+          console.warn(`Google login blocked: user ${user.email} not found in database`);
+          return false; // User must exist in DB
+        }
+
+        if (!existingUser.isActive) {
+          console.warn(`Google login blocked: user ${user.email} is inactive`);
+          return false; // User must be active
+        }
+      }
+
+      return true; // Allow sign-in
+    },
     async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
