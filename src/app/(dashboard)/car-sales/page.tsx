@@ -462,6 +462,7 @@ function LeadDrawer({ lead, onClose, onUpdate }: { lead: Lead; onClose: () => vo
     const r = await fetch(`/api/car-sales/leads/${lead.id}/reminders`);
     const d = await r.json();
     setReminders(Array.isArray(d) ? d : []);
+    onUpdate(); // Refresh the pipeline to show reminder on the card
   }
 
   const meta = STAGE_META[form.stage] || STAGE_META["New Lead"];
