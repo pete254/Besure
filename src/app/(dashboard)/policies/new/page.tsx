@@ -49,6 +49,8 @@ interface BenefitEntry {
   dentalLimit?: string;
   opticalLimit?: string;
   maternityLimit?: string;
+  // Manual premium override for coverage items (windscreen/infotainment/entertainment)
+  manualPremium?: string; // User can override the calculated premium
 }
 
 interface PolicyDocument {
@@ -556,12 +558,19 @@ export default function NewPolicyPage() {
         const entry = { ...b, [field]: value };
         if (field === "windscreenValue") {
           entry.amountKes = calcCoveragePremium(value);
+          entry.manualPremium = ""; // Clear manual override when value changes
         }
         if (field === "infotainmentValue") {
           entry.amountKes = calcCoveragePremium(value);
+          entry.manualPremium = ""; // Clear manual override when value changes
         }
         if (field === "entertainmentValue") {
           entry.amountKes = calcCoveragePremium(value);
+          entry.manualPremium = ""; // Clear manual override when value changes
+        }
+        if (field === "manualPremium") {
+          // User is manually editing the premium
+          entry.amountKes = value; // Use the manual value directly
         }
         if (field === "percentageRate") {
           // When rate changes, recalculate amount: rate (as %) * sum insured
@@ -921,9 +930,12 @@ export default function NewPolicyPage() {
             <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
               Premium (KES)
             </label>
-            <div style={{ padding: "7px 10px", backgroundColor: "var(--bg-card)", border: `1px solid ${isFree ? "rgba(16,185,129,0.4)" : "var(--brand)"}`, borderRadius: "6px", fontSize: "13px", fontWeight: 700, color: "var(--brand)" }}>
-              {isFree ? "FREE (≤ 50k)" : parseFloat(b.amountKes || "0") > 0 ? formatKES(b.amountKes) : "Enter value above"}
-            </div>
+            <input type="number" step="0.01" placeholder="0.00" value={b.manualPremium ?? b.amountKes ?? ""}
+              onChange={(e) => updateBenefitField(b.benefitOptionId, "manualPremium", e.target.value)}
+              style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
+              onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+            {!b.manualPremium && <p style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>Auto: {parseFloat(b.amountKes || "0") > 0 ? `${formatKES(b.amountKes)}` : "FREE"}</p>}
           </div>
         </div>
       );

@@ -38,6 +38,8 @@ interface SelectedBenefit {
   infotainmentValue?: string;
   entertainmentValue?: string;
   lossOfUseDays?: string;
+  // Manual premium override for coverage items (windscreen/infotainment/entertainment)
+  manualPremium?: string; // User can override the calculated premium
 }
 
 interface CalcResult {
@@ -322,9 +324,22 @@ export default function CalculatorPage() {
     setSelectedBenefits(prev => prev.map(b => {
       if (b.benefitOptionId !== id) return b;
       const entry = { ...b, [field]: value };
-      if (field === "windscreenValue") entry.amountKes = calcCoveragePremium(value);
-      if (field === "infotainmentValue") entry.amountKes = calcCoveragePremium(value);
-      if (field === "entertainmentValue") entry.amountKes = calcCoveragePremium(value);
+      if (field === "windscreenValue") {
+        entry.amountKes = calcCoveragePremium(value);
+        entry.manualPremium = ""; // Clear manual override when value changes
+      }
+      if (field === "infotainmentValue") {
+        entry.amountKes = calcCoveragePremium(value);
+        entry.manualPremium = ""; // Clear manual override when value changes
+      }
+      if (field === "entertainmentValue") {
+        entry.amountKes = calcCoveragePremium(value);
+        entry.manualPremium = ""; // Clear manual override when value changes
+      }
+      if (field === "manualPremium") {
+        // User is manually editing the premium
+        entry.amountKes = value; // Use the manual value directly
+      }
       if (field === "percentageRate") {
         // When rate changes, recalculate amount: rate (as %) * sum insured
         const rateAsDecimal = parseFloat(value || "0") / 100;
@@ -500,9 +515,12 @@ export default function CalculatorPage() {
             <label style={{ fontSize: "10px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "3px" }}>
               Premium
             </label>
-            <div style={{ padding: "6px 8px", backgroundColor: "var(--bg-card)", border: `1px solid ${isFree ? "rgba(16,185,129,0.4)" : "var(--brand)"}`, borderRadius: "6px", fontSize: "12px", fontWeight: 700, color: "var(--brand)" }}>
-              {isFree ? "FREE" : parseFloat(b.amountKes || "0") > 0 ? `KES ${parseFloat(b.amountKes).toLocaleString("en-KE", { minimumFractionDigits: 2 })}` : "Enter value →"}
-            </div>
+            <input type="number" step="0.01" placeholder="0.00" value={b.manualPremium ?? b.amountKes ?? ""}
+              onChange={(e) => updateBenefitField(b.benefitOptionId, "manualPremium", e.target.value)}
+              style={{ width: "100%", padding: "6px 8px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "12px", outline: "none" }}
+              onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} />
+            {!b.manualPremium && <p style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "2px" }}>Auto: {parseFloat(b.amountKes || "0") > 0 ? `KES ${parseFloat(b.amountKes).toLocaleString()}` : "FREE"}</p>}
           </div>
         </div>
       );
