@@ -569,8 +569,14 @@ export default function NewPolicyPage() {
           entry.manualPremium = ""; // Clear manual override when value changes
         }
         if (field === "manualPremium") {
-          // User is manually editing the premium
-          entry.amountKes = value; // Use the manual value directly
+          if (value) {
+            entry.amountKes = value;
+          } else {
+            // User cleared the manual override — revert to the auto-calculated value
+            if (b.windscreenValue) entry.amountKes = calcCoveragePremium(b.windscreenValue);
+            else if (b.infotainmentValue) entry.amountKes = calcCoveragePremium(b.infotainmentValue);
+            else if (b.entertainmentValue) entry.amountKes = calcCoveragePremium(b.entertainmentValue);
+          }
         }
         if (field === "percentageRate") {
           // When rate changes, recalculate amount: rate (as %) * sum insured
@@ -930,7 +936,7 @@ export default function NewPolicyPage() {
             <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
               Premium (KES)
             </label>
-            <input type="number" step="0.01" placeholder="0.00" value={b.manualPremium ?? b.amountKes ?? ""}
+            <input type="number" step="0.01" placeholder="0.00" value={b.manualPremium || b.amountKes || ""}
               onChange={(e) => updateBenefitField(b.benefitOptionId, "manualPremium", e.target.value)}
               style={{ width: "100%", padding: "7px 10px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "13px", outline: "none" }}
               onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}

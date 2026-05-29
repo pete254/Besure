@@ -208,35 +208,53 @@ export default function CalculatorPage() {
   }
 
   async function generateProposal(preview = false) {
-    if (!result) return;
+    if (!canCalculate) return;
     setDownloadingPdf(true);
     setPdfError("");
     try {
+      // Always recalculate fresh so the PDF reflects the current selected benefits,
+      // not a potentially stale debounced result.
+      const calcRes = await fetch("/api/calculator/premium", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          insuranceType,
+          insurerId: selectedInsurerId || null,
+          sumInsured: insuranceType === "Medical / Health" ? 1000000 : parseFloat(sumInsured),
+          basicRate: insuranceType === "Medical / Health" ? 0 : parseFloat(basicRate),
+          basicPremium: insuranceType === "Medical / Health" ? parseFloat(basicRate) : null,
+          benefits: buildBenefitsPayload(),
+        }),
+      });
+      const freshResult = await calcRes.json();
+      if (!calcRes.ok) { setPdfError("Failed to generate proposal. Please try again."); return; }
+      setResult(freshResult);
+
       const res = await fetch("/api/calculator/proposal-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           insuranceType,
-          insurerName: result.insurer?.name || manualInsurer || "—",
+          insurerName: freshResult.insurer?.name || manualInsurer || "—",
           clientName: clientInfo.name || undefined,
           clientPhone: clientInfo.phone || undefined,
           clientEmail: clientInfo.email || undefined,
           vehicleReg: clientInfo.vehicleReg || undefined,
           vehicleMake: clientInfo.vehicleMake || undefined,
           vehicleYear: clientInfo.vehicleYear || undefined,
-          sumInsured: result.sumInsured,
-          basicRate: result.basicRate,
-          basicPremium: result.basicPremiumFinal,
-          minimumApplied: result.minimumApplied,
-          minPremium: result.minPremium,
-          benefits: result.benefits,
-          totalBenefits: result.totalBenefits,
-          iraLevy: result.iraLevy,
-          stampDuty: result.stampDuty,
-          phcf: result.phcf,
-          grandTotal: result.grandTotal,
-          agencyCommission: result.agencyCommission,
-          commissionRate: result.commissionRate,
+          sumInsured: freshResult.sumInsured,
+          basicRate: freshResult.basicRate,
+          basicPremium: freshResult.basicPremiumFinal,
+          minimumApplied: freshResult.minimumApplied,
+          minPremium: freshResult.minPremium,
+          benefits: freshResult.benefits,
+          totalBenefits: freshResult.totalBenefits,
+          iraLevy: freshResult.iraLevy,
+          stampDuty: freshResult.stampDuty,
+          phcf: freshResult.phcf,
+          grandTotal: freshResult.grandTotal,
+          agencyCommission: freshResult.agencyCommission,
+          commissionRate: freshResult.commissionRate,
           validDays: 30,
         }),
       });
@@ -337,8 +355,14 @@ export default function CalculatorPage() {
         entry.manualPremium = ""; // Clear manual override when value changes
       }
       if (field === "manualPremium") {
-        // User is manually editing the premium
-        entry.amountKes = value; // Use the manual value directly
+        if (value) {
+          entry.amountKes = value;
+        } else {
+          // User cleared the manual override — revert to the auto-calculated value
+          if (b.windscreenValue) entry.amountKes = calcCoveragePremium(b.windscreenValue);
+          else if (b.infotainmentValue) entry.amountKes = calcCoveragePremium(b.infotainmentValue);
+          else if (b.entertainmentValue) entry.amountKes = calcCoveragePremium(b.entertainmentValue);
+        }
       }
       if (field === "percentageRate") {
         // When rate changes, recalculate amount: rate (as %) * sum insured
@@ -515,7 +539,7 @@ export default function CalculatorPage() {
             <label style={{ fontSize: "10px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", display: "block", marginBottom: "3px" }}>
               Premium
             </label>
-            <input type="number" step="0.01" placeholder="0.00" value={b.manualPremium ?? b.amountKes ?? ""}
+            <input type="number" step="0.01" placeholder="0.00" value={b.manualPremium || b.amountKes || ""}
               onChange={(e) => updateBenefitField(b.benefitOptionId, "manualPremium", e.target.value)}
               style={{ width: "100%", padding: "6px 8px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text-primary)", fontSize: "12px", outline: "none" }}
               onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}

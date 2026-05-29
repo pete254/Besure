@@ -564,7 +564,9 @@ function ProposalDocument({ data }: { data: ProposalData }) {
                 {data.benefits.map((b, i) => (
                   <View key={i} style={i % 2 === 0 ? styles.premiumRowAlt : styles.premiumRow}>
                     <Text style={styles.premiumLabel}>  • {b.benefitName}</Text>
-                    <Text style={styles.premiumValue}>{fmt(b.amountKes)}</Text>
+                    <Text style={b.amountKes > 0 ? styles.premiumValue : styles.premiumValueMuted}>
+                      {b.amountKes > 0 ? fmt(b.amountKes) : "Free"}
+                    </Text>
                   </View>
                 ))}
                 <View style={styles.premiumRowSubtotal}>
