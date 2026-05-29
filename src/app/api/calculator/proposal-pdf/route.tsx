@@ -596,12 +596,6 @@ function ProposalDocument({ data }: { data: ProposalData }) {
               <Text style={styles.premiumLabel}>Stamp Duty</Text>
               <Text style={styles.premiumValue}>{fmt(data.stampDuty)}</Text>
             </View>
-            <View style={styles.premiumRowAlt}>
-              <Text style={styles.premiumLabel}>
-                Policyholders Compensation Fund (PHCF)
-              </Text>
-              <Text style={styles.premiumValue}>{fmt(data.phcf)}</Text>
-            </View>
 
             {/* Grand Total */}
             <View style={styles.totalRow}>

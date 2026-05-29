@@ -419,10 +419,6 @@ function RiskNoteDocument({ data }: { data: any }) {
             <Text style={styles.premiumValue}>{fmt(policy.trainingLevy)}</Text>
           </View>
           <View style={styles.premiumRow}>
-            <Text style={styles.premiumLabel}>Policyholders Compensation Fund (PHCF)</Text>
-            <Text style={styles.premiumValue}>{fmt(policy.phcf)}</Text>
-          </View>
-          <View style={styles.premiumRow}>
             <Text style={styles.premiumLabel}>Stamp Duty</Text>
             <Text style={styles.premiumValue}>{policy.stampDuty === "0" || !policy.stampDuty ? "NIL" : fmt(policy.stampDuty)}</Text>
           </View>
