@@ -233,6 +233,7 @@ export const insurers = pgTable("insurers", {
   name: varchar("name", { length: 255 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
   commissionRate: numeric("commission_rate", { precision: 5, scale: 2 }),
+  commissionRateMedical: numeric("commission_rate_medical", { precision: 5, scale: 2 }),
   rateMotorPrivate: numeric("rate_motor_private", { precision: 5, scale: 2 }),
   rateMotorCommercial: numeric("rate_motor_commercial", { precision: 5, scale: 2 }),
   ratePsv: numeric("rate_psv", { precision: 5, scale: 2 }),

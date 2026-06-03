@@ -32,7 +32,7 @@ export async function calculateCommissionForPolicy(policyId: string) {
     .select({
       policy: policies,
       customer: { id: customers.id },
-      insurer: { id: insurers.id, commissionRate: insurers.commissionRate },
+      insurer: { id: insurers.id, commissionRate: insurers.commissionRate, commissionRateMedical: insurers.commissionRateMedical },
     })
     .from(policies)
     .leftJoin(customers, eq(policies.customerId, customers.id))
@@ -52,7 +52,10 @@ export async function calculateCommissionForPolicy(policyId: string) {
   });
 
   const grandTotal = parseFloat(policy.policy.grandTotal || "0");
-  const commissionRate = parseFloat(policy.insurer?.commissionRate || "0");
+  const isMedical = policy.policy.insuranceType === "Medical / Health";
+  const commissionRate = isMedical
+    ? parseFloat(policy.insurer?.commissionRateMedical || policy.insurer?.commissionRate || "0")
+    : parseFloat(policy.insurer?.commissionRate || "0");
 
   if (!policy.customer) {
     throw new Error(`Policy has no customer: ${policyId}`);
@@ -197,9 +200,11 @@ export async function regenerateAllCommissions() {
       id: policies.id,
       customerId: policies.customerId,
       insurerId: insurers.id,
+      insuranceType: policies.insuranceType,
       grandTotal: policies.grandTotal,
       startDate: policies.startDate,
       commissionRate: insurers.commissionRate,
+      commissionRateMedical: insurers.commissionRateMedical,
     })
     .from(policies)
     .leftJoin(customers, eq(policies.customerId, customers.id))
@@ -220,7 +225,10 @@ export async function regenerateAllCommissions() {
   for (const policy of allPolicies) {
     try {
       const grandTotal = parseFloat(policy.grandTotal || "0");
-      const commissionRate = parseFloat(policy.commissionRate || "0");
+      const isMedical = policy.insuranceType === "Medical / Health";
+      const commissionRate = isMedical
+        ? parseFloat(policy.commissionRateMedical || policy.commissionRate || "0")
+        : parseFloat(policy.commissionRate || "0");
       const commissionAmount = (grandTotal * commissionRate) / 100;
 
       // Calculate expected due date

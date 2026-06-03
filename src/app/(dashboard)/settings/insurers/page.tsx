@@ -12,6 +12,7 @@ interface Insurer {
   name: string;
   isActive: boolean;
   commissionRate?: string | null;
+  commissionRateMedical?: string | null;
   rateMotorPrivate?: string | null;
   rateMotorCommercial?: string | null;
   ratePsv?: string | null;
@@ -25,6 +26,7 @@ const emptyForm = {
   name: "",
   isActive: true,
   commissionRate: "",
+  commissionRateMedical: "",
   rateMotorPrivate: "",
   rateMotorCommercial: "",
   ratePsv: "",
@@ -93,6 +95,7 @@ export default function InsurersPage() {
       name: insurer.name,
       isActive: insurer.isActive,
       commissionRate: insurer.commissionRate || "",
+      commissionRateMedical: insurer.commissionRateMedical || "",
       rateMotorPrivate: insurer.rateMotorPrivate || "",
       rateMotorCommercial: insurer.rateMotorCommercial || "",
       ratePsv: insurer.ratePsv || "",
@@ -131,11 +134,17 @@ export default function InsurersPage() {
       errors.name = "Insurer name is required";
     }
 
-    // Validate commission rate
+    // Validate commission rates
     if (form.commissionRate) {
       const rate = parseFloat(form.commissionRate);
       if (isNaN(rate) || rate < 0 || rate > 100) {
         errors.commissionRate = "Commission rate must be between 0% and 100%";
+      }
+    }
+    if (form.commissionRateMedical) {
+      const rate = parseFloat(form.commissionRateMedical);
+      if (isNaN(rate) || rate < 0 || rate > 100) {
+        errors.commissionRateMedical = "Commission rate must be between 0% and 100%";
       }
     }
 
@@ -233,8 +242,8 @@ export default function InsurersPage() {
 
       {/* Table */}
       <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 80px", padding: "10px 16px", borderBottom: "1px solid var(--border)", backgroundColor: "var(--bg-sidebar)" }}>
-          {["Insurer", "Commission %", "Rate Private", "Rate Comm.", "Rate PSV", "Status", ""].map((h) => (
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 80px", padding: "10px 16px", borderBottom: "1px solid var(--border)", backgroundColor: "var(--bg-sidebar)" }}>
+          {["Insurer", "Motor Comm.", "Med. Comm.", "Rate Private", "Rate Comm.", "Rate PSV", "Rate Medical", "Status", ""].map((h) => (
             <span key={h} style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>{h}</span>
           ))}
         </div>
@@ -247,15 +256,17 @@ export default function InsurersPage() {
           insurers.map((ins, i) => (
             <div
               key={ins.id}
-              style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 80px", padding: "12px 16px", borderBottom: i < insurers.length - 1 ? "1px solid var(--border)" : "none", alignItems: "center" }}
+              style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 80px", padding: "12px 16px", borderBottom: i < insurers.length - 1 ? "1px solid var(--border)" : "none", alignItems: "center" }}
               onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-hover)")}
               onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
             >
               <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff" }}>{ins.name}</span>
               <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{ins.commissionRate ? `${ins.commissionRate}%` : "—"}</span>
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{ins.commissionRateMedical ? `${ins.commissionRateMedical}%` : "—"}</span>
               <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{ins.rateMotorPrivate ? `${ins.rateMotorPrivate}%` : "—"}</span>
               <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{ins.rateMotorCommercial ? `${ins.rateMotorCommercial}%` : "—"}</span>
               <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{ins.ratePsv ? `${ins.ratePsv}%` : "—"}</span>
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{ins.rateMedical ? `${ins.rateMedical}%` : "—"}</span>
 
               {/* Active toggle */}
               <button
@@ -320,10 +331,17 @@ export default function InsurersPage() {
                 <FieldError message={fieldErrors.name} />
               </div>
 
-              <div data-error={!!fieldErrors.commissionRate || undefined}>
-                <label style={labelStyle}>Commission Rate (%)</label>
-                <input name="commissionRate" value={form.commissionRate} onChange={handleChange} placeholder="e.g. 12.50" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.commissionRate ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.commissionRate ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.commissionRate ? "#f87171" : "var(--border)"; }} />
-                <FieldError message={fieldErrors.commissionRate} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div data-error={!!fieldErrors.commissionRate || undefined}>
+                  <label style={labelStyle}>Commission Rate — Motor (%)</label>
+                  <input name="commissionRate" value={form.commissionRate} onChange={handleChange} placeholder="e.g. 12.50" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.commissionRate ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.commissionRate ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.commissionRate ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.commissionRate} />
+                </div>
+                <div data-error={!!fieldErrors.commissionRateMedical || undefined}>
+                  <label style={labelStyle}>Commission Rate — Medical (%)</label>
+                  <input name="commissionRateMedical" value={form.commissionRateMedical} onChange={handleChange} placeholder="e.g. 12.50" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.commissionRateMedical ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.commissionRateMedical ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.commissionRateMedical ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.commissionRateMedical} />
+                </div>
               </div>
 
               <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "4px 0 0" }}>Default Rates (%)</p>

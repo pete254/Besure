@@ -10,6 +10,7 @@ const insurerSchema = z.object({
   name: z.string().min(1, "Insurer name is required"),
   isActive: z.boolean().default(true),
   commissionRate: z.string().optional().nullable(),
+  commissionRateMedical: z.string().optional().nullable(),
   rateMotorPrivate: z.string().optional().nullable(),
   rateMotorCommercial: z.string().optional().nullable(),
   ratePsv: z.string().optional().nullable(),
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
       .values({
         ...d,
         commissionRate: cleanNumeric(d.commissionRate),
+        commissionRateMedical: cleanNumeric(d.commissionRateMedical),
         rateMotorPrivate: cleanNumeric(d.rateMotorPrivate),
         rateMotorCommercial: cleanNumeric(d.rateMotorCommercial),
         ratePsv: cleanNumeric(d.ratePsv),

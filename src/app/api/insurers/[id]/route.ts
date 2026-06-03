@@ -10,6 +10,7 @@ const updateInsurerSchema = z.object({
   name: z.string().min(1).optional(),
   isActive: z.boolean().optional(),
   commissionRate: z.string().optional().nullable(),
+  commissionRateMedical: z.string().optional().nullable(),
   rateMotorPrivate: z.string().optional().nullable(),
   rateMotorCommercial: z.string().optional().nullable(),
   ratePsv: z.string().optional().nullable(),
@@ -47,6 +48,7 @@ export async function PUT(
       .set({
         ...d,
         commissionRate: "commissionRate" in d ? cleanNumeric(d.commissionRate) : undefined,
+        commissionRateMedical: "commissionRateMedical" in d ? cleanNumeric(d.commissionRateMedical) : undefined,
         rateMotorPrivate: "rateMotorPrivate" in d ? cleanNumeric(d.rateMotorPrivate) : undefined,
         rateMotorCommercial: "rateMotorCommercial" in d ? cleanNumeric(d.rateMotorCommercial) : undefined,
         ratePsv: "ratePsv" in d ? cleanNumeric(d.ratePsv) : undefined,
