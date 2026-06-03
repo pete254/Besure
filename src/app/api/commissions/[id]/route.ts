@@ -10,6 +10,7 @@ const updateCommissionSchema = z.object({
   status: z.enum(["Pending", "Paid"]).optional(),
   expectedDueDate: z.string().optional(),
   settledDate: z.string().optional().nullable(),
+  commissionAmount: z.union([z.string(), z.number()]).optional(),
   notes: z.string().optional().nullable(),
 });
 
@@ -25,9 +26,10 @@ export async function PATCH(
     const updated = await db
       .update(commissions)
       .set({
-        ...(parsed.status && { status: parsed.status }),
+        ...(parsed.status !== undefined && { status: parsed.status }),
         ...(parsed.expectedDueDate && { expectedDueDate: parsed.expectedDueDate }),
         ...(parsed.settledDate !== undefined && { settledDate: parsed.settledDate }),
+        ...(parsed.commissionAmount !== undefined && { commissionAmount: String(parsed.commissionAmount) }),
         ...(parsed.notes !== undefined && { notes: parsed.notes }),
         updatedAt: new Date(),
       })
