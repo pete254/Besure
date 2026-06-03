@@ -13,10 +13,16 @@ const insurerSchema = z.object({
   rateMotorPrivate: z.string().optional().nullable(),
   rateMotorCommercial: z.string().optional().nullable(),
   ratePsv: z.string().optional().nullable(),
+  rateMedical: z.string().optional().nullable(),
   minPremiumPrivate: z.string().optional().nullable(),
   minPremiumCommercial: z.string().optional().nullable(),
   minPremiumPsv: z.string().optional().nullable(),
 });
+
+function cleanNumeric(val: string | null | undefined): string | null {
+  if (val == null || val.trim() === "") return null;
+  return val;
+}
 
 // GET /api/insurers
 export async function GET() {
@@ -45,9 +51,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const d = parsed.data;
     const [newInsurer] = await db
       .insert(insurers)
-      .values(parsed.data)
+      .values({
+        ...d,
+        commissionRate: cleanNumeric(d.commissionRate),
+        rateMotorPrivate: cleanNumeric(d.rateMotorPrivate),
+        rateMotorCommercial: cleanNumeric(d.rateMotorCommercial),
+        ratePsv: cleanNumeric(d.ratePsv),
+        rateMedical: cleanNumeric(d.rateMedical),
+        minPremiumPrivate: cleanNumeric(d.minPremiumPrivate),
+        minPremiumCommercial: cleanNumeric(d.minPremiumCommercial),
+        minPremiumPsv: cleanNumeric(d.minPremiumPsv),
+      })
       .returning();
 
     return NextResponse.json({ insurer: newInsurer }, { status: 201 });

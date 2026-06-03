@@ -236,6 +236,7 @@ export const insurers = pgTable("insurers", {
   rateMotorPrivate: numeric("rate_motor_private", { precision: 5, scale: 2 }),
   rateMotorCommercial: numeric("rate_motor_commercial", { precision: 5, scale: 2 }),
   ratePsv: numeric("rate_psv", { precision: 5, scale: 2 }),
+  rateMedical: numeric("rate_medical", { precision: 5, scale: 2 }),
   minPremiumPrivate: numeric("min_premium_private", { precision: 12, scale: 2 }),
   minPremiumCommercial: numeric("min_premium_commercial", { precision: 12, scale: 2 }),
   minPremiumPsv: numeric("min_premium_psv", { precision: 12, scale: 2 }),

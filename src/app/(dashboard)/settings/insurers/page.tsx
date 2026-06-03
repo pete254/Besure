@@ -15,6 +15,7 @@ interface Insurer {
   rateMotorPrivate?: string | null;
   rateMotorCommercial?: string | null;
   ratePsv?: string | null;
+  rateMedical?: string | null;
   minPremiumPrivate?: string | null;
   minPremiumCommercial?: string | null;
   minPremiumPsv?: string | null;
@@ -27,6 +28,7 @@ const emptyForm = {
   rateMotorPrivate: "",
   rateMotorCommercial: "",
   ratePsv: "",
+  rateMedical: "10",
   minPremiumPrivate: "",
   minPremiumCommercial: "",
   minPremiumPsv: "",
@@ -94,6 +96,7 @@ export default function InsurersPage() {
       rateMotorPrivate: insurer.rateMotorPrivate || "",
       rateMotorCommercial: insurer.rateMotorCommercial || "",
       ratePsv: insurer.ratePsv || "",
+      rateMedical: insurer.rateMedical || "10",
       minPremiumPrivate: insurer.minPremiumPrivate || "",
       minPremiumCommercial: insurer.minPremiumCommercial || "",
       minPremiumPsv: insurer.minPremiumPsv || "",
@@ -137,7 +140,7 @@ export default function InsurersPage() {
     }
 
     // Validate rate fields
-    ["rateMotorPrivate", "rateMotorCommercial", "ratePsv"].forEach(key => {
+    ["rateMotorPrivate", "rateMotorCommercial", "ratePsv", "rateMedical"].forEach(key => {
       const val = (form as any)[key];
       if (val) {
         const rate = parseFloat(val);
@@ -324,7 +327,7 @@ export default function InsurersPage() {
               </div>
 
               <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "4px 0 0" }}>Default Rates (%)</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div data-error={!!fieldErrors.rateMotorPrivate || undefined}>
                   <label style={labelStyle}>Motor Private</label>
                   <input name="rateMotorPrivate" value={form.rateMotorPrivate} onChange={handleChange} placeholder="4.00" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.rateMotorPrivate ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.rateMotorPrivate ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.rateMotorPrivate ? "#f87171" : "var(--border)"; }} />
@@ -339,6 +342,11 @@ export default function InsurersPage() {
                   <label style={labelStyle}>PSV / Matatu</label>
                   <input name="ratePsv" value={form.ratePsv} onChange={handleChange} placeholder="5.00" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.ratePsv ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.ratePsv ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.ratePsv ? "#f87171" : "var(--border)"; }} />
                   <FieldError message={fieldErrors.ratePsv} />
+                </div>
+                <div data-error={!!fieldErrors.rateMedical || undefined}>
+                  <label style={labelStyle}>Medical / Health</label>
+                  <input name="rateMedical" value={form.rateMedical} onChange={handleChange} placeholder="10.00" type="number" step="0.01" style={{ ...inputStyle, borderColor: fieldErrors.rateMedical ? "#f87171" : "1px solid var(--border)" }} onFocus={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.rateMedical ? "#f87171" : "var(--brand)"; }} onBlur={(e) => { (e.target as HTMLElement).style.borderColor = fieldErrors.rateMedical ? "#f87171" : "var(--border)"; }} />
+                  <FieldError message={fieldErrors.rateMedical} />
                 </div>
               </div>
 

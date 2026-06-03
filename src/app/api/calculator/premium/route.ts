@@ -71,18 +71,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Core calculations ──────────────────────────────────────────
-    const isMedicalType = insuranceType === "Medical / Health";
-
-    // For medical, basicPremium is passed directly (no rate calculation)
-    const calculatedBasicPremium = isMedicalType
-      ? (basicPremium || 0)   // pass-through
-      : (sumInsured * basicRate) / 100;
-    
-    const basicPremiumFinal = isMedicalType
-      ? (basicPremium || 0)   // use passed premium directly
-      : Math.max(calculatedBasicPremium, minPremium);
-    
-    const minimumApplied = !isMedicalType && calculatedBasicPremium < minPremium && minPremium > 0;
+    const calculatedBasicPremium = (sumInsured * basicRate) / 100;
+    const basicPremiumFinal = Math.max(calculatedBasicPremium, minPremium);
+    const minimumApplied = calculatedBasicPremium < minPremium && minPremium > 0;
 
     const totalBenefits = benefits.reduce((s, b) => s + b.amountKes, 0);
 
@@ -103,7 +94,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       sumInsured,
-      basicRate: isMedicalType ? null : basicRate,
+      basicRate,
       basicPremium: basicPremium || null,
       calculatedBasicPremium: parseFloat(calculatedBasicPremium.toFixed(2)),
       basicPremiumFinal: parseFloat(basicPremiumFinal.toFixed(2)),

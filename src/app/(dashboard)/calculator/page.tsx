@@ -13,7 +13,8 @@ import {
 interface Insurer {
   id: string; name: string; isActive: boolean;
   rateMotorPrivate?: string | null; rateMotorCommercial?: string | null;
-  ratePsv?: string | null; minPremiumPrivate?: string | null;
+  ratePsv?: string | null; rateMedical?: string | null;
+  minPremiumPrivate?: string | null;
   minPremiumCommercial?: string | null; minPremiumPsv?: string | null;
   commissionRate?: string | null;
 }
@@ -145,23 +146,21 @@ export default function CalculatorPage() {
 
   // Auto-fill rate when insurer or type changes
   useEffect(() => {
-    if (!selectedInsurerId) return;
-    const ins = insurers.find(i => i.id === selectedInsurerId);
-    if (!ins) return;
+    const ins = selectedInsurerId ? insurers.find(i => i.id === selectedInsurerId) : null;
     let rate = "";
-    if (insuranceType === "Motor - Private Comp") rate = ins.rateMotorPrivate || "";
+    if (insuranceType === "Motor - Private" || insuranceType === "Motor - Private Comp")
+      rate = ins?.rateMotorPrivate || "";
     else if (
       insuranceType === "Motor - Commercial" ||
       insuranceType === "Motor - Commercial Institutional" ||
       insuranceType === "Motor - Commercial TSV"
-    ) rate = ins.rateMotorCommercial || "";
-    else if (insuranceType === "Motor - PSV / Matatu") rate = ins.ratePsv || "";
+    ) rate = ins?.rateMotorCommercial || "";
+    else if (insuranceType === "Motor - PSV / Matatu") rate = ins?.ratePsv || "";
+    else if (insuranceType === "Medical / Health") rate = ins?.rateMedical || "10";
     if (rate) setBasicRate(rate);
   }, [selectedInsurerId, insuranceType, insurers]);
 
-  const canCalculate = insuranceType === "Medical / Health" 
-    ? parseFloat(basicRate) > 0  // For medical, basicRate contains the premium amount
-    : parseFloat(sumInsured) > 0 && parseFloat(basicRate) > 0;
+  const canCalculate = parseFloat(sumInsured) > 0 && parseFloat(basicRate) > 0;
 
   // Build benefits payload for the API (only the amountKes values)
   function buildBenefitsPayload() {
@@ -191,9 +190,8 @@ export default function CalculatorPage() {
         body: JSON.stringify({
           insuranceType,
           insurerId: selectedInsurerId || null,
-          sumInsured: insuranceType === "Medical / Health" ? 1000000 : parseFloat(sumInsured), // Use dummy sum insured for medical
-          basicRate: insuranceType === "Medical / Health" ? 0 : parseFloat(basicRate), // Pass 0 rate for medical
-          basicPremium: insuranceType === "Medical / Health" ? parseFloat(basicRate) : null, // Pass premium for medical
+          sumInsured: parseFloat(sumInsured),
+          basicRate: parseFloat(basicRate),
           benefits: buildBenefitsPayload(),
         }),
       });
@@ -220,9 +218,8 @@ export default function CalculatorPage() {
         body: JSON.stringify({
           insuranceType,
           insurerId: selectedInsurerId || null,
-          sumInsured: insuranceType === "Medical / Health" ? 1000000 : parseFloat(sumInsured),
-          basicRate: insuranceType === "Medical / Health" ? 0 : parseFloat(basicRate),
-          basicPremium: insuranceType === "Medical / Health" ? parseFloat(basicRate) : null,
+          sumInsured: parseFloat(sumInsured),
+          basicRate: parseFloat(basicRate),
           benefits: buildBenefitsPayload(),
         }),
       });
@@ -636,29 +633,11 @@ export default function CalculatorPage() {
                 </div>
               )}
               <div>
-                {insuranceType === "Medical / Health" ? (
-                  <>
-                    <label style={lbStyle}>Net Premium (KES)</label>
-                    <input 
-                      type="number" 
-                      value={basicRate} 
-                      onChange={(e) => setBasicRate(e.target.value)} 
-                      placeholder="e.g. 45000" 
-                      style={{ ...inStyle, fontSize: "15px", fontWeight: 600, color: "var(--brand)" }} 
-                      onFocus={foc} 
-                      onBlur={blr} 
-                    />
-                    <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>
-                      Enter the premium as quoted by the insurer — levies calculated automatically
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <label style={lbStyle}>Basic Premium Rate (%)</label>
-                    <input type="number" step="0.01" value={basicRate} onChange={(e) => setBasicRate(e.target.value)} placeholder="e.g. 4.00" style={inStyle} onFocus={foc} onBlur={blr} />
-                    {selectedInsurerId && <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>Auto-filled from insurer — editable</p>}
-                  </>
-                )}
+                <label style={lbStyle}>Basic Premium Rate (%)</label>
+                <input type="number" step="0.01" value={basicRate} onChange={(e) => setBasicRate(e.target.value)} placeholder={insuranceType === "Medical / Health" ? "10.00" : "e.g. 4.00"} style={inStyle} onFocus={foc} onBlur={blr} />
+                <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>
+                  {insuranceType === "Medical / Health" ? "Default 10% — auto-filled from insurer, editable" : selectedInsurerId ? "Auto-filled from insurer — editable" : ""}
+                </p>
               </div>
             </div>
           </div>
@@ -823,7 +802,7 @@ export default function CalculatorPage() {
                     <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Basic Premium ({result.basicRate}%)</span>
                     {result.minimumApplied && <span style={{ display: "block", fontSize: "10px", color: "#fbbf24", marginTop: "1px" }}>⚠ Minimum applied ({fmt(result.minPremium || 0)})</span>}
                   </div>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>{fmt(result.basicPremium)}</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>{fmt(result.basicPremiumFinal)}</span>
                 </div>
 
                 {result.benefits.length > 0 && (
