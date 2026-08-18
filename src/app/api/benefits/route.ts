@@ -5,11 +5,16 @@ import { db } from "@/lib/db";
 import { benefitOptions } from "@/drizzle/schema";
 import { asc } from "drizzle-orm";
 import { z } from "zod";
+import { BENEFIT_GROUP_VALUES } from "@/lib/benefit-groups";
 
 const benefitSchema = z.object({
   name: z.string().min(1, "Benefit name is required"),
   isActive: z.boolean().default(true),
   sortOrder: z.number().default(0),
+  // Which insurance-type group the benefit shows up for
+  applicableTo: z.enum(BENEFIT_GROUP_VALUES).default("both"),
+  // How the amount is worked out — null / fixed_editable means typed in manually
+  calcConfig: z.record(z.string(), z.any()).nullable().optional(),
 });
 
 // GET /api/benefits

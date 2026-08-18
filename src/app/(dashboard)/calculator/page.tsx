@@ -9,6 +9,7 @@ import {
   Calculator, RefreshCw, Copy, Check, ChevronDown, ChevronUp,
   FileDown, User, Phone, Mail, Car, Loader2, Eye,
 } from "lucide-react";
+import { benefitAppliesTo } from "@/lib/benefit-groups";
 
 interface Insurer {
   id: string; name: string; isActive: boolean;
@@ -44,7 +45,7 @@ interface SelectedBenefit {
 }
 
 interface CalcResult {
-  sumInsured: number; basicRate: number;
+  sumInsured: number; basicRate: number | null;
   calculatedBasicPremium: number; basicPremium: number; basicPremiumFinal: number;
   minimumApplied: boolean; minPremium: number | null;
   totalBenefits: number;
@@ -70,14 +71,23 @@ const INSURANCE_TYPES = [
   { value: "Motor - Commercial TSV", label: "Motor — Commercial TSV", group: "commercial" },
   { value: "Motor - Commercial Third Party", label: "Motor — Commercial Third Party", group: "commercial" },
   { value: "Medical / Health", label: "Medical — Health", group: "medical" },
+  { value: "Carriers Liability", label: "Carrier's Liability", group: "carriers_liability" },
+  { value: "Professional Indemnity", label: "Professional Indemnity", group: "professional_indemnity" },
 ];
 
-function getBenefitGroup(insuranceType: string): "private" | "commercial" | "medical" | "none" {
+// Types quoted as a lump-sum premium — no rate × sum insured calculation
+const MANUAL_PREMIUM_TYPES = ["Carriers Liability", "Professional Indemnity"];
+
+function getBenefitGroup(
+  insuranceType: string
+): "private" | "commercial" | "medical" | "carriers_liability" | "professional_indemnity" | "none" {
   const found = INSURANCE_TYPES.find(t => t.value === insuranceType);
   if (!found) return "none";
   if (found.group === "private") return "private";
   if (found.group === "commercial") return "commercial";
   if (found.group === "medical") return "medical";
+  if (found.group === "carriers_liability") return "carriers_liability";
+  if (found.group === "professional_indemnity") return "professional_indemnity";
   return "none";
 }
 
@@ -110,6 +120,7 @@ export default function CalculatorPage() {
   const [insuranceType, setInsuranceType] = useState("Motor - Private Comp");
   const [sumInsured, setSumInsured] = useState("");
   const [basicRate, setBasicRate] = useState("");
+  const [netPremium, setNetPremium] = useState("");
   const [selectedBenefits, setSelectedBenefits] = useState<SelectedBenefit[]>([]);
   const [result, setResult] = useState<CalcResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -135,13 +146,12 @@ export default function CalculatorPage() {
 
   // Filter benefits by current insurance type group
   const benefitGroup = getBenefitGroup(insuranceType);
-  const availableBenefits = allBenefits.filter(b =>
-    b.applicableTo === benefitGroup || b.applicableTo === "both"
-  );
+  const availableBenefits = allBenefits.filter(b => benefitAppliesTo(b.applicableTo, benefitGroup));
 
   // Clear selected benefits when insurance type changes (different benefit sets)
   useEffect(() => {
     setSelectedBenefits([]);
+    setNetPremium("");
   }, [insuranceType]);
 
   // Auto-fill rate when insurer or type changes
@@ -160,7 +170,11 @@ export default function CalculatorPage() {
     if (rate) setBasicRate(rate);
   }, [selectedInsurerId, insuranceType, insurers]);
 
-  const canCalculate = parseFloat(sumInsured) > 0 && parseFloat(basicRate) > 0;
+  const isManualPremium = MANUAL_PREMIUM_TYPES.includes(insuranceType);
+
+  const canCalculate = isManualPremium
+    ? parseFloat(netPremium) > 0
+    : parseFloat(sumInsured) > 0 && parseFloat(basicRate) > 0;
 
   // Build benefits payload for the API (only the amountKes values)
   function buildBenefitsPayload() {
@@ -177,7 +191,7 @@ export default function CalculatorPage() {
     if (!canCalculate) { setResult(null); return; }
     const timer = setTimeout(() => calculate(false), 400);
     return () => clearTimeout(timer);
-  }, [sumInsured, basicRate, selectedInsurerId, insuranceType, selectedBenefits]);
+  }, [sumInsured, basicRate, netPremium, selectedInsurerId, insuranceType, selectedBenefits]);
 
   async function calculate(showLoader = true) {
     if (!canCalculate) return;
@@ -190,8 +204,9 @@ export default function CalculatorPage() {
         body: JSON.stringify({
           insuranceType,
           insurerId: selectedInsurerId || null,
-          sumInsured: parseFloat(sumInsured),
-          basicRate: parseFloat(basicRate),
+          sumInsured: parseFloat(sumInsured || "0"),
+          basicRate: isManualPremium ? 0 : parseFloat(basicRate),
+          basicPremium: isManualPremium ? parseFloat(netPremium || "0") : null,
           benefits: buildBenefitsPayload(),
         }),
       });
@@ -218,8 +233,9 @@ export default function CalculatorPage() {
         body: JSON.stringify({
           insuranceType,
           insurerId: selectedInsurerId || null,
-          sumInsured: parseFloat(sumInsured),
-          basicRate: parseFloat(basicRate),
+          sumInsured: parseFloat(sumInsured || "0"),
+          basicRate: isManualPremium ? 0 : parseFloat(basicRate),
+          basicPremium: isManualPremium ? parseFloat(netPremium || "0") : null,
           benefits: buildBenefitsPayload(),
         }),
       });
@@ -389,7 +405,7 @@ export default function CalculatorPage() {
   }, [sumInsured, allBenefits]);
 
   function resetAll() {
-    setSumInsured(""); setBasicRate(""); setSelectedInsurerId("");
+    setSumInsured(""); setBasicRate(""); setNetPremium(""); setSelectedInsurerId("");
     setManualInsurer(""); setSelectedBenefits([]); setResult(null);
     setError(""); setShowBenefits(false);
     setClientInfo({ name: "", phone: "", email: "", vehicleReg: "", vehicleMake: "", vehicleYear: "" });
@@ -404,9 +420,9 @@ export default function CalculatorPage() {
       `Insurance Type: ${insuranceType}`,
       `Insurer: ${insName}`,
       ``,
-      `Sum Insured:     ${fmt(result.sumInsured)}`,
-      `Basic Rate:      ${result.basicRate}%`,
-      `Basic Premium:   ${fmt(result.basicPremium)}`,
+      ...(result.sumInsured > 0 ? [`Sum Insured:     ${fmt(result.sumInsured)}`] : []),
+      ...(result.basicRate ? [`Basic Rate:      ${result.basicRate}%`] : []),
+      `Basic Premium:   ${fmt(result.basicPremiumFinal)}`,
       ...(result.minimumApplied ? [`  (minimum premium applied: ${fmt(result.minPremium || 0)})`] : []),
       ...(result.benefits.length > 0 ? [
         ``,
@@ -632,26 +648,36 @@ export default function CalculatorPage() {
                   <input value={manualInsurer} onChange={(e) => setManualInsurer(e.target.value)} placeholder="Type insurer name..." style={inStyle} onFocus={foc} onBlur={blr} />
                 </div>
               )}
-              <div>
-                <label style={lbStyle}>Basic Premium Rate (%)</label>
-                <input type="number" step="0.01" value={basicRate} onChange={(e) => setBasicRate(e.target.value)} placeholder={insuranceType === "Medical / Health" ? "10.00" : "e.g. 4.00"} style={inStyle} onFocus={foc} onBlur={blr} />
-                <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>
-                  {insuranceType === "Medical / Health" ? "Default 10% — auto-filled from insurer, editable" : selectedInsurerId ? "Auto-filled from insurer — editable" : ""}
-                </p>
-              </div>
+              {isManualPremium ? (
+                <div>
+                  <label style={lbStyle}>Net Premium (KES) *</label>
+                  <input type="number" step="0.01" value={netPremium} onChange={(e) => setNetPremium(e.target.value)} placeholder="e.g. 45000" style={{ ...inStyle, fontSize: "15px", fontWeight: 600, color: "var(--brand)" }} onFocus={foc} onBlur={blr} />
+                  <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>
+                    Enter the premium quoted by the insurer — levies are added automatically
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label style={lbStyle}>Basic Premium Rate (%)</label>
+                  <input type="number" step="0.01" value={basicRate} onChange={(e) => setBasicRate(e.target.value)} placeholder={insuranceType === "Medical / Health" ? "10.00" : "e.g. 4.00"} style={inStyle} onFocus={foc} onBlur={blr} />
+                  <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>
+                    {insuranceType === "Medical / Health" ? "Default 10% — auto-filled from insurer, editable" : selectedInsurerId ? "Auto-filled from insurer — editable" : ""}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Vehicle value / Cover Limit */}
           <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "18px" }}>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", marginBottom: "12px", paddingBottom: "8px", borderBottom: "1px solid var(--border)" }}>
-              {insuranceType === "Medical / Health" ? "Cover Limit" : "Vehicle Value"}
+              {insuranceType === "Medical / Health" ? "Cover Limit" : isManualPremium ? "Limit of Liability" : "Vehicle Value"}
             </p>
             <div>
               <label style={lbStyle}>
-                {insuranceType === "Medical / Health" ? "Cover Limit (KES)" : "Sum Insured / Vehicle Value (KES)"}
+                {insuranceType === "Medical / Health" ? "Cover Limit (KES)" : isManualPremium ? "Limit of Liability (KES) — optional" : "Sum Insured / Vehicle Value (KES)"}
               </label>
-              <input type="number" value={sumInsured} onChange={(e) => setSumInsured(e.target.value)} placeholder={insuranceType === "Medical / Health" ? "e.g. 1000000" : "e.g. 1500000"} style={{ ...inStyle, fontSize: "15px", fontWeight: 600, color: "var(--brand)" }} onFocus={foc} onBlur={blr} />
+              <input type="number" value={sumInsured} onChange={(e) => setSumInsured(e.target.value)} placeholder={insuranceType === "Medical / Health" ? "e.g. 1000000" : isManualPremium ? "e.g. 10000000" : "e.g. 1500000"} style={{ ...inStyle, fontSize: "15px", fontWeight: 600, color: "var(--brand)" }} onFocus={foc} onBlur={blr} />
             </div>
             {sumInsured && parseFloat(sumInsured) > 0 && (
               <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "6px" }}>
@@ -799,7 +825,7 @@ export default function CalculatorPage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--border)" }}>
                   <div>
-                    <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Basic Premium ({result.basicRate}%)</span>
+                    <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Basic Premium{result.basicRate ? ` (${result.basicRate}%)` : ""}</span>
                     {result.minimumApplied && <span style={{ display: "block", fontSize: "10px", color: "#fbbf24", marginTop: "1px" }}>⚠ Minimum applied ({fmt(result.minPremium || 0)})</span>}
                   </div>
                   <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>{fmt(result.basicPremiumFinal)}</span>
@@ -904,7 +930,7 @@ export default function CalculatorPage() {
                   </button>
                 </div>
                 <a
-                  href={`/policies/new?${selectedInsurerId ? `insurerId=${selectedInsurerId}&` : `insurerNameManual=${encodeURIComponent(manualInsurer || result?.insurer?.name || "")}&`}sumInsured=${sumInsured}&basicRate=${basicRate}&insuranceType=${encodeURIComponent(insuranceType)}`}
+                  href={`/policies/new?${selectedInsurerId ? `insurerId=${selectedInsurerId}&` : `insurerNameManual=${encodeURIComponent(manualInsurer || result?.insurer?.name || "")}&`}sumInsured=${sumInsured}&${isManualPremium ? `basicPremium=${netPremium}` : `basicRate=${basicRate}`}&insuranceType=${encodeURIComponent(insuranceType)}`}
                   style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "9px", backgroundColor: "var(--brand)", color: "#000", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 700, textDecoration: "none", cursor: "pointer" }}
                 >
                   Create Policy with this Quote

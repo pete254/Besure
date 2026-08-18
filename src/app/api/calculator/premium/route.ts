@@ -9,6 +9,9 @@ import { insurers } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+// Types quoted as a lump-sum premium — the caller sends basicPremium and no rate
+const MANUAL_PREMIUM_TYPES = ["Carriers Liability", "Professional Indemnity"];
+
 const calcSchema = z.object({
   insuranceType: z.enum([
     "Motor - Private",
@@ -19,6 +22,8 @@ const calcSchema = z.object({
     "Motor - Commercial TSV",
     "Motor - Commercial Third Party",
     "Medical / Health",
+    "Carriers Liability",
+    "Professional Indemnity",
   ]),
   insurerId: z.string().uuid().optional().nullable(),
   sumInsured: z.number().min(0),
@@ -71,9 +76,16 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Core calculations ──────────────────────────────────────────
-    const calculatedBasicPremium = (sumInsured * basicRate) / 100;
-    const basicPremiumFinal = Math.max(calculatedBasicPremium, minPremium);
-    const minimumApplied = calculatedBasicPremium < minPremium && minPremium > 0;
+    // Liability covers are quoted as a lump sum — use the premium as entered,
+    // everything else is rate × sum insured with the insurer minimum applied.
+    const isManualPremium = MANUAL_PREMIUM_TYPES.includes(insuranceType);
+    const calculatedBasicPremium = isManualPremium
+      ? (basicPremium || 0)
+      : (sumInsured * basicRate) / 100;
+    const basicPremiumFinal = isManualPremium
+      ? calculatedBasicPremium
+      : Math.max(calculatedBasicPremium, minPremium);
+    const minimumApplied = !isManualPremium && calculatedBasicPremium < minPremium && minPremium > 0;
 
     const totalBenefits = benefits.reduce((s, b) => s + b.amountKes, 0);
 
@@ -94,7 +106,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       sumInsured,
-      basicRate,
+      basicRate: isManualPremium ? null : basicRate,
       basicPremium: basicPremium || null,
       calculatedBasicPremium: parseFloat(calculatedBasicPremium.toFixed(2)),
       basicPremiumFinal: parseFloat(basicPremiumFinal.toFixed(2)),

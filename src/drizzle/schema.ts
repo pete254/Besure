@@ -24,7 +24,8 @@ export const customerDocTypeEnum = pgEnum("customer_doc_type", [
   "ID", "PASSPORT", "KRA", "OTHER",
 ]);
 
-// Updated: renamed Motor - Private → Motor - Private Comp, added 3 new commercial types
+// Updated: renamed Motor - Private → Motor - Private Comp, added 3 new commercial types,
+// then added Carriers Liability + Professional Indemnity (manually-entered benefit amounts)
 export const insuranceTypeEnum = pgEnum("insurance_type", [
   "Motor - Private",
   "Motor - Private Comp",
@@ -38,6 +39,8 @@ export const insuranceTypeEnum = pgEnum("insurance_type", [
   "Medical / Health",
   "Life Insurance",
   "Travel Insurance",
+  "Carriers Liability",
+  "Professional Indemnity",
 ]);
 
 export const coverTypeEnum = pgEnum("cover_type", ["Comprehensive", "TPO", "TPFT", "medical"]);

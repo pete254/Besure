@@ -394,6 +394,13 @@ function fmtDate(d: Date) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
 }
 
+// Covers that are not motor — no vehicle details, quoted against a cover limit
+const NON_MOTOR_TYPES = [
+  "Medical / Health",
+  "Carriers Liability",
+  "Professional Indemnity",
+];
+
 // ─── PDF Document ─────────────────────────────────────────────────────────────
 
 interface ProposalData {
@@ -406,7 +413,7 @@ interface ProposalData {
   vehicleMake?: string;
   vehicleYear?: string;
   sumInsured: number;
-  basicRate: number;
+  basicRate: number | null;
   basicPremium: number;
   minimumApplied: boolean;
   minPremium?: number | null;
@@ -491,11 +498,15 @@ function ProposalDocument({ data }: { data: ProposalData }) {
               <Text style={styles.infoLabel}>Proposed Insurer</Text>
               <Text style={styles.infoValue}>{data.insurerName.toUpperCase()}</Text>
             </View>
-            {data.insuranceType === "Medical / Health" ? (
-              <View style={styles.infoCell}>
-                <Text style={styles.infoLabel}>Cover Limit</Text>
-                <Text style={styles.infoValue}>{fmt(data.sumInsured)}</Text>
-              </View>
+            {NON_MOTOR_TYPES.includes(data.insuranceType) ? (
+              data.sumInsured > 0 ? (
+                <View style={styles.infoCell}>
+                  <Text style={styles.infoLabel}>
+                    {data.insuranceType === "Medical / Health" ? "Cover Limit" : "Limit of Liability"}
+                  </Text>
+                  <Text style={styles.infoValue}>{fmt(data.sumInsured)}</Text>
+                </View>
+              ) : null
             ) : (
               <>
                 {data.vehicleReg && (
@@ -658,11 +669,13 @@ function ProposalDocument({ data }: { data: ProposalData }) {
           <View style={styles.noticeBox}>
             <Text style={styles.noticeTitle}>IMPORTANT NOTES</Text>
             <Text style={styles.noticeText}>
-              {data.insuranceType === "Medical / Health" ? (
+              {NON_MOTOR_TYPES.includes(data.insuranceType) ? (
                 <>
                   1. This is a quotation only and does not constitute a binding insurance contract.{"\n"}
                   2. Cover will only commence upon receipt of the full premium or first installment and issuance of a Cover Note.{"\n"}
-                  3. The cover limit should reflect adequate medical coverage for your needs. Please review all benefits and exclusions carefully.{"\n"}
+                  3. {data.insuranceType === "Medical / Health"
+                        ? "The cover limit should reflect adequate medical coverage for your needs. Please review all benefits and exclusions carefully."
+                        : "The limits of liability quoted should reflect your actual exposure. Please review all benefits, limits and exclusions carefully."}{"\n"}
                   4. Full terms and conditions are as per the policy wording issued by the selected insurer.{"\n"}
                   5. Myloe Insurance Agency is regulated by the Insurance Regulatory Authority (IRA) of Kenya.
                 </>

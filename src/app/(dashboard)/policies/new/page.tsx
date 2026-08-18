@@ -8,7 +8,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, Upload, X, Eye, RefreshCw } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
+import FormErrorBanner from "@/components/ui/FormErrorBanner";
 import DraftBanner from "@/components/DraftBanner";
+import { benefitAppliesTo } from "@/lib/benefit-groups";
 import { useDraft } from "@/hooks/useDraft";
 import {
   validateRequired,
@@ -102,15 +104,25 @@ const INSURANCE_TYPES = [
   { value: "Medical / Health", label: "Medical / Health", motor: false, group: "medical" },
   { value: "Life Insurance", label: "Life Insurance", motor: false, group: "other" },
   { value: "Travel Insurance", label: "Travel Insurance", motor: false, group: "other" },
+  { value: "Carriers Liability", label: "Carrier's Liability", motor: false, group: "carriers_liability" },
+  { value: "Professional Indemnity", label: "Professional Indemnity", motor: false, group: "professional_indemnity" },
 ];
 
+// Types whose premium is quoted by the insurer and typed in directly
+// (no rate × sum insured calculation) — same handling as Medical / Health.
+const MANUAL_PREMIUM_TYPES = ["Carriers Liability", "Professional Indemnity"];
+
 // Which benefit group applies to each insurance type
-function getBenefitGroup(insuranceType: string): "private" | "commercial" | "medical" | "none" {
+function getBenefitGroup(
+  insuranceType: string
+): "private" | "commercial" | "medical" | "carriers_liability" | "professional_indemnity" | "none" {
   const found = INSURANCE_TYPES.find(t => t.value === insuranceType);
   if (!found) return "none";
   if (found.group === "private") return "private";
   if (found.group === "commercial") return "commercial";
   if (found.group === "medical") return "medical";
+  if (found.group === "carriers_liability") return "carriers_liability";
+  if (found.group === "professional_indemnity") return "professional_indemnity";
   // commercial_tp — no benefits for now
   return "none";
 }
@@ -184,6 +196,7 @@ export default function NewPolicyPage() {
   const insurerIdFromUrl = searchParams.get("insurerId") || "";
   const sumInsuredFromUrl = searchParams.get("sumInsured") || "";
   const basicRateFromUrl = searchParams.get("basicRate") || "";
+  const basicPremiumFromUrl = searchParams.get("basicPremium") || "";
   
   return {
     ...emptyPolicy,
@@ -193,6 +206,7 @@ export default function NewPolicyPage() {
     insurerId: insurerIdFromUrl,
     sumInsured: sumInsuredFromUrl,
     basicRate: basicRateFromUrl,
+    basicPremium: basicPremiumFromUrl,
     insurerNameManual: searchParams.get("insurerNameManual") || "",
   };
 });
@@ -245,10 +259,12 @@ export default function NewPolicyPage() {
 
   const isMotor = INSURANCE_TYPES.find(t => t.value === data.insuranceType)?.motor ?? false;
   const isMedical = data.insuranceType === "Medical / Health";
+  // Liability covers: premium is typed in manually, benefit amounts are typed in manually
+  const isManualPremium = MANUAL_PREMIUM_TYPES.includes(data.insuranceType);
   const benefitGroup = getBenefitGroup(data.insuranceType);
 
   // Filter benefits based on current insurance type group
-  const availableBenefits = allBenefits.filter(b => b.applicableTo === benefitGroup);
+  const availableBenefits = allBenefits.filter(b => benefitAppliesTo(b.applicableTo, benefitGroup));
 
   useEffect(() => {
     fetch("/api/insurers").then(r => r.json()).then(d =>
@@ -394,14 +410,14 @@ export default function NewPolicyPage() {
 
   // Fix 6: Auto-calculate basic premium for motor only (not for medical)
   useEffect(() => {
-    if (isMedical) return; // Don't override medical's manually-entered premium
+    if (isMedical || isManualPremium) return; // Don't override a manually-entered premium
     const sum = parseFloat(data.sumInsured || "0");
     const rate = parseFloat(data.basicRate || "0");
     if (sum > 0 && rate > 0) {
       const basic = (sum * rate / 100).toFixed(2);
       setData(prev => ({ ...prev, basicPremium: basic }));
     }
-  }, [data.sumInsured, data.basicRate, isMedical]);
+  }, [data.sumInsured, data.basicRate, isMedical, isManualPremium]);
 
   // Recalculate percentage-based benefits when sum insured changes
   useEffect(() => {
@@ -671,8 +687,8 @@ export default function NewPolicyPage() {
     }
 
     if (currentStep === 5) {
-      if (isMedical) {
-        // Medical: validate basicPremium directly (no rate calculation)
+      if (isMedical || isManualPremium) {
+        // Medical / liability covers: validate basicPremium directly (no rate calculation)
         if (!data.basicPremium || parseFloat(data.basicPremium) <= 0) {
           errors.basicPremium = "⚠️ Net premium amount is required (enter the quoted premium)";
         }
@@ -700,8 +716,8 @@ export default function NewPolicyPage() {
     if (isRenewMode && renewSourceId) {
       // Use the renew endpoint — handles vehicle copy, marks old expired, etc.
       const bens = data.benefits.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0);
-      const basic = isMedical 
-        ? parseFloat(data.basicPremium || "0")  // Use direct premium for medical
+      const basic = (isMedical || isManualPremium)
+        ? parseFloat(data.basicPremium || "0")  // Use direct premium for medical / liability covers
         : (parseFloat(data.sumInsured || "0") * parseFloat(data.basicRate || "0") / 100);  // Calculate for motor
       const iraLevy = (basic + bens) * 0.0045;
       const grand = (basic + bens + iraLevy + 40).toFixed(2);
@@ -764,9 +780,9 @@ export default function NewPolicyPage() {
             ? parseInt(data.medicalMeta.waitingPeriodDays) 
             : null,
         } : null,
-        // For medical, use basicPremium directly (not calculated from rate)
-        basicRate: isMedical ? null : data.basicRate,
-        basicPremium: isMedical 
+        // For medical + liability covers, use basicPremium directly (not calculated from rate)
+        basicRate: (isMedical || isManualPremium) ? null : data.basicRate,
+        basicPremium: (isMedical || isManualPremium)
           ? data.basicPremium 
           : (parseFloat(data.sumInsured) * parseFloat(data.basicRate) / 100).toFixed(2),
         documents: [],
@@ -1122,11 +1138,7 @@ export default function NewPolicyPage() {
         })}
       </div>
 
-      {error && (
-        <div style={{ padding: "12px 16px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "13px", marginBottom: "16px" }}>
-          {error}
-        </div>
-      )}
+      <FormErrorBanner message={error} fieldErrors={fieldErrors} />
 
       {/* ── STEP 1: Insurance Type ── */}
       {step === 1 && (
@@ -1180,7 +1192,9 @@ export default function NewPolicyPage() {
                 <span style={{ fontSize: "13px", fontWeight: 600, color: data.insuranceType === t.value ? "var(--brand)" : "var(--text-secondary)" }}>
                   {t.label}
                 </span>
-                <span style={{ marginLeft: "auto", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 600, backgroundColor: "rgba(107,114,128,0.15)", color: "#9ca3af" }}>Phase 2</span>
+                {t.group === "other" && (
+                  <span style={{ marginLeft: "auto", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 600, backgroundColor: "rgba(107,114,128,0.15)", color: "#9ca3af" }}>Phase 2</span>
+                )}
               </label>
             ))}
           </div>
@@ -1497,7 +1511,7 @@ export default function NewPolicyPage() {
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
               <div>
-                <label style={lbStyle}>{isMedical ? "Inpatient Cover Limit (KES) *" : "Vehicle Value / Sum Insured (KES) *"}</label>
+                <label style={lbStyle}>{isMedical ? "Inpatient Cover Limit (KES) *" : isManualPremium ? "Limit of Liability / Sum Insured (KES)" : "Vehicle Value / Sum Insured (KES) *"}</label>
                 <input type="number" placeholder="1500000" value={isMedical ? data.medicalMeta.inpatientLimit : data.sumInsured}
                   onChange={(e) => {
                     if (isMedical) {
@@ -1541,15 +1555,15 @@ export default function NewPolicyPage() {
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px" }}>
           <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>Rate Entry & Premium Calculation</p>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            {isMedical && (
+            {(isMedical || isManualPremium) && (
               <div style={{ backgroundColor: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "8px", padding: "12px", marginBottom: "8px" }}>
                 <p style={{ fontSize: "12px", color: "var(--brand)", fontWeight: 600, margin: 0 }}>
-                  Medical — enter the total premium quoted by the insurer. IRA Levy (0.45%) and Stamp Duty (KES 40) will be added automatically.
+                  {isMedical ? "Medical" : INSURANCE_TYPES.find(t => t.value === data.insuranceType)?.label || data.insuranceType} — enter the total premium quoted by the insurer. IRA Levy (0.45%) and Stamp Duty (KES 40) will be added automatically.
                 </p>
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-              {!isMedical ? (
+              {!(isMedical || isManualPremium) ? (
                 <div>
                   <label style={lbStyle}>Basic Premium Rate (%) *</label>
                   <input type="number" step="0.01" placeholder="4.00" value={data.basicRate}

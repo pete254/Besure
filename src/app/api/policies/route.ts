@@ -22,6 +22,8 @@ const createPolicySchema = z.object({
     "Medical / Health",
     "Life Insurance",
     "Travel Insurance",
+    "Carriers Liability",
+    "Professional Indemnity",
   ], { message: "Please select a valid insurance type" }),
   customerId: z.string().uuid("Please select a valid customer"),
   insurerId: z.string().uuid().optional().nullable(),

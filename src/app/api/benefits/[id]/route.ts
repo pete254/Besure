@@ -5,11 +5,15 @@ import { db } from "@/lib/db";
 import { benefitOptions } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { BENEFIT_GROUP_VALUES } from "@/lib/benefit-groups";
 
 const updateBenefitSchema = z.object({
   name: z.string().min(1).optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().optional(),
+  applicableTo: z.enum(BENEFIT_GROUP_VALUES).optional(),
+  // Omit calcConfig to leave the existing calculation rule untouched
+  calcConfig: z.record(z.string(), z.any()).nullable().optional(),
 });
 
 // PUT /api/benefits/[id]
