@@ -201,7 +201,25 @@ export function NewLeadModal({ onClose, onSuccess }: NewLeadModalProps) {
 
         {error && (
           <div style={{ padding: "12px 14px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", color: "#dc2626", fontSize: "13px" }}>
-            {error}
+            <div style={{ fontWeight: 600 }}>{error}</div>
+            {(() => {
+              const messages = Array.from(
+                new Set(
+                  Object.values(errors)
+                    .filter(Boolean)
+                    .map((m) => m.replace(/^[⚠️❌\s]+/, "").trim())
+                    .filter(Boolean)
+                )
+              );
+              if (messages.length === 0) return null;
+              return (
+                <ul style={{ margin: "8px 0 0", paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "3px" }}>
+                  {messages.map((m, i) => (
+                    <li key={i}>{m}</li>
+                  ))}
+                </ul>
+              );
+            })()}
           </div>
         )}
 

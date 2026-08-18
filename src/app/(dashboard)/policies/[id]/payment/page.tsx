@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
+import FormErrorBanner from "@/components/ui/FormErrorBanner";
 
 interface Payment {
   id: string;
@@ -276,11 +277,7 @@ export default function RecordPaymentPage() {
                   {success}
                 </div>
               )}
-              {error && (
-                <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "13px", marginBottom: "14px" }}>
-                  {error}
-                </div>
-              )}
+              <FormErrorBanner message={error} fieldErrors={fieldErrors} compact />
 
               <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <div>

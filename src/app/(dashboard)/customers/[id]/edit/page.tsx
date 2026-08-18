@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Plus, Trash2, Upload, X, FileText } from "lucide-react";
 import FieldErrorComponent from "@/components/ui/FieldError";
+import FormErrorBanner from "@/components/ui/FormErrorBanner";
 import {
   validatePhone,
   validateEmail,
@@ -41,6 +42,7 @@ function DocField({
   value,
   fileName,
   onChange,
+  error,
 }: {
   label: string;
   valueKey: string;
@@ -48,6 +50,7 @@ function DocField({
   value: string;
   fileName: string;
   onChange: (key: string, val: string) => void;
+  error?: string;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,17 +61,18 @@ function DocField({
       </label>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
         {/* Text Value */}
-        <div>
+        <div data-error={!!error || undefined}>
           <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 500 }}>Number / Value</div>
           <input
             type="text"
             value={value || ""}
             onChange={(e) => onChange(valueKey, e.target.value)}
             placeholder={`Enter ${label} value`}
-            style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
-            onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
-            onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }}
+            style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: `1px solid ${error ? "#f87171" : "var(--border)"}`, borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+            onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = error ? "#f87171" : "var(--brand)"; }}
+            onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = error ? "#f87171" : "var(--border)"; }}
           />
+          <FieldErrorComponent message={error} />
         </div>
 
         {/* File Upload */}
@@ -378,11 +382,7 @@ export default function EditCustomerPage() {
         Edit Customer
       </h2>
 
-      {error && (
-        <div style={{ padding: "12px 16px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "13px", marginBottom: "16px" }}>
-          {error}
-        </div>
-      )}
+      <FormErrorBanner message={error} fieldErrors={fieldErrors} />
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
@@ -526,6 +526,7 @@ export default function EditCustomerPage() {
                 value={form.idNumberValue}
                 fileName={form.idNumberFile}
                 onChange={handleDocValue}
+                error={fieldErrors.idNumberValue}
               />
               <DocField
                 label="KRA PIN"
@@ -534,6 +535,7 @@ export default function EditCustomerPage() {
                 value={form.kraPinValue}
                 fileName={form.kraPinFile}
                 onChange={handleDocValue}
+                error={fieldErrors.kraPinValue}
               />
             </div>
           </div>
@@ -551,6 +553,7 @@ export default function EditCustomerPage() {
                 value={form.certOfIncorporationValue}
                 fileName={form.certOfIncorporationFile}
                 onChange={handleDocValue}
+                error={fieldErrors.certOfIncorporationValue}
               />
               <DocField
                 label="CR12"
@@ -559,6 +562,7 @@ export default function EditCustomerPage() {
                 value={form.cr12Value}
                 fileName={form.cr12File}
                 onChange={handleDocValue}
+                error={fieldErrors.cr12Value}
               />
               <DocField
                 label="KRA PIN (Company)"
@@ -567,6 +571,7 @@ export default function EditCustomerPage() {
                 value={form.companyKraPinValue}
                 fileName={form.companyKraPinFile}
                 onChange={handleDocValue}
+                error={fieldErrors.companyKraPinValue}
               />
             </div>
           </div>

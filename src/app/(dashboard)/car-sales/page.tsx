@@ -791,7 +791,8 @@ function LeadDrawer({ lead, onClose, onUpdate }: { lead: Lead; onClose: () => vo
 
 function LeadCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
   const hasOverdueReminder = lead.reminderDate && isOverdue(lead.reminderDate);
-  const hasOverdueCommission = lead.commissionDueDate && isOverdue(lead.commissionDueDate) && lead.commissionStatus !== "Paid";
+  // Commission only becomes due once the car has actually been released.
+  const hasOverdueCommission = lead.stage === "Released" && lead.commissionDueDate && isOverdue(lead.commissionDueDate) && lead.commissionStatus !== "Paid";
 
   return (
     <div onClick={onClick} style={{ padding: "12px", backgroundColor: "var(--bg-card)", borderRadius: "8px", border: "1px solid var(--border)", cursor: "pointer", transition: "border-color 0.1s, background-color 0.1s" }}

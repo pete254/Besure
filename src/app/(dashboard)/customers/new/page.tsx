@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
+import FormErrorBanner from "@/components/ui/FormErrorBanner";
 import {
   validatePhone,
   validateEmail,
@@ -47,13 +48,14 @@ function FieldErrorLegacy({ message }: { message?: string }) {
 }
 
 // Reusable doc field: both file upload AND text value, side-by-side
-function DocField({ 
-  label, 
-  valueKey, 
+function DocField({
+  label,
+  valueKey,
   fileKey,
-  value, 
+  value,
   fileName,
-  onChange 
+  onChange,
+  error,
 }: {
   label: string;
   valueKey: string;
@@ -61,6 +63,7 @@ function DocField({
   value: string;
   fileName: string;
   onChange: (key: string, val: string) => void;
+  error?: string;
 }) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -76,17 +79,18 @@ function DocField({
       <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>{label}</label>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
         {/* Text Value Input */}
-        <div>
+        <div data-error={!!error || undefined}>
           <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 500 }}>Enter Value</div>
-          <input 
+          <input
             type="text"
             value={value || ""}
             onChange={(e) => onChange(valueKey, e.target.value)}
             placeholder={`Enter ${label} number/value`}
-            style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
-            onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--brand)"; }}
-            onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "var(--border)"; }} 
+            style={{ width: "100%", padding: "9px 12px", backgroundColor: "var(--bg-app)", border: `1px solid ${error ? "#f87171" : "var(--border)"}`, borderRadius: "8px", color: "var(--text-primary)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+            onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = error ? "#f87171" : "var(--brand)"; }}
+            onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = error ? "#f87171" : "var(--border)"; }}
           />
+          <FieldError message={error} />
         </div>
 
         {/* File Upload Input */}
@@ -431,7 +435,7 @@ export default function NewCustomerPage() {
         <ArrowLeft size={14} /> Back to Customers
       </Link>
 
-      {error && <div style={{ padding: "12px 16px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "13px", marginBottom: "16px" }}>{error}</div>}
+      <FormErrorBanner message={error} fieldErrors={fieldErrors} />
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
@@ -520,8 +524,8 @@ export default function NewCustomerPage() {
           <div style={S.section}>
             <p style={S.title}>Identity Documents</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
-              <DocField label="National ID" valueKey="idNumberValue" fileKey="idNumberFile" value={form.idNumberValue} fileName={form.idNumberFile} onChange={handleDocValue} />
-              <DocField label="KRA PIN" valueKey="kraPinValue" fileKey="kraPinFile" value={form.kraPinValue} fileName={form.kraPinFile} onChange={handleDocValue} />
+              <DocField label="National ID" valueKey="idNumberValue" fileKey="idNumberFile" value={form.idNumberValue} fileName={form.idNumberFile} onChange={handleDocValue} error={fieldErrors.idNumberValue} />
+              <DocField label="KRA PIN" valueKey="kraPinValue" fileKey="kraPinFile" value={form.kraPinValue} fileName={form.kraPinFile} onChange={handleDocValue} error={fieldErrors.kraPinValue} />
             </div>
           </div>
         )}
@@ -531,9 +535,9 @@ export default function NewCustomerPage() {
           <div style={S.section}>
             <p style={S.title}>Company Documents</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
-              <DocField label="Certificate of Incorporation" valueKey="certOfIncorporationValue" fileKey="certOfIncorporationFile" value={form.certOfIncorporationValue} fileName={form.certOfIncorporationFile} onChange={handleDocValue} />
-              <DocField label="CR12" valueKey="cr12Value" fileKey="cr12File" value={form.cr12Value} fileName={form.cr12File} onChange={handleDocValue} />
-              <DocField label="KRA PIN (Company)" valueKey="companyKraPinValue" fileKey="companyKraPinFile" value={form.companyKraPinValue} fileName={form.companyKraPinFile} onChange={handleDocValue} />
+              <DocField label="Certificate of Incorporation" valueKey="certOfIncorporationValue" fileKey="certOfIncorporationFile" value={form.certOfIncorporationValue} fileName={form.certOfIncorporationFile} onChange={handleDocValue} error={fieldErrors.certOfIncorporationValue} />
+              <DocField label="CR12" valueKey="cr12Value" fileKey="cr12File" value={form.cr12Value} fileName={form.cr12File} onChange={handleDocValue} error={fieldErrors.cr12Value} />
+              <DocField label="KRA PIN (Company)" valueKey="companyKraPinValue" fileKey="companyKraPinFile" value={form.companyKraPinValue} fileName={form.companyKraPinFile} onChange={handleDocValue} error={fieldErrors.companyKraPinValue} />
             </div>
           </div>
         )}

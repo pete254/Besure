@@ -81,8 +81,9 @@ const NEXT_STAGES = {
 
 export function LeadCard({ lead, onEdit, onStageChange }: LeadCardProps) {
   const hasReminder = lead.reminderDate && new Date(lead.reminderDate) <= new Date();
-  const hasOverdueCommission = lead.commissionDueDate && 
-    new Date(lead.commissionDueDate) < new Date() && 
+  const hasOverdueCommission = lead.stage === "Released" &&
+    lead.commissionDueDate &&
+    new Date(lead.commissionDueDate) < new Date() &&
     lead.commissionStatus === "Pending";
 
   return (

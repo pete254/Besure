@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Plus, Pencil, Trash2, X, Check, AlertTriangle, Search, MapPin, Phone } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
+import FormErrorBanner from "@/components/ui/FormErrorBanner";
 import { validatePhone } from "@/lib/validation";
 
 interface Garage {
@@ -259,7 +260,7 @@ export default function GaragesPage() {
               <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#ffffff", margin: 0 }}>{editTarget ? "Edit Garage" : "Add Garage"}</h3>
               <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }}><X size={16} /></button>
             </div>
-            {error && <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "12px", marginBottom: "14px" }}>{error}</div>}
+            <FormErrorBanner message={error} fieldErrors={fieldErrors} compact />
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div data-error={!!fieldErrors.name || undefined}>
                 <label style={labelStyle}>Garage Name *</label>

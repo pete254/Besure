@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
+import FormErrorBanner from "@/components/ui/FormErrorBanner";
 import DraftBanner from "@/components/DraftBanner";
 import { useDraft } from "@/hooks/useDraft";
 import { validateRequired, validateDate } from "@/lib/validation";
@@ -238,7 +239,7 @@ export default function NewClaimPage() {
         <ArrowLeft size={14} /> Back to Claims
       </Link>
 
-      {error && <div style={{ padding: "12px 16px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "13px", marginBottom: "16px" }}>{error}</div>}
+      <FormErrorBanner message={error} fieldErrors={fieldErrors} />
 
       {/* Draft banner */}
       <div style={{ marginBottom: "16px" }}>

@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Plus, Pencil, Trash2, X, Check, AlertTriangle } from "lucide-react";
 import FieldError from "@/components/ui/FieldError";
+import FormErrorBanner from "@/components/ui/FormErrorBanner";
 
 interface Insurer {
   id: string;
@@ -318,11 +319,7 @@ export default function InsurersPage() {
               </button>
             </div>
 
-            {error && (
-              <div style={{ padding: "10px 12px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#fca5a5", fontSize: "12px", marginBottom: "16px" }}>
-                {error}
-              </div>
-            )}
+            <FormErrorBanner message={error} fieldErrors={fieldErrors} compact />
 
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div data-error={!!fieldErrors.name || undefined}>
