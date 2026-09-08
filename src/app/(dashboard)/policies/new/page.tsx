@@ -114,15 +114,16 @@ const INSURANCE_TYPES = [
 // Which benefit group applies to each insurance type
 function getBenefitGroup(
   insuranceType: string
-): "private" | "commercial" | "medical" | "carriers_liability" | "professional_indemnity" | "none" {
+): "private" | "commercial" | "commercial_tp" | "medical" | "carriers_liability" | "professional_indemnity" | "none" {
   const found = INSURANCE_TYPES.find(t => t.value === insuranceType);
   if (!found) return "none";
   if (found.group === "private") return "private";
   if (found.group === "commercial") return "commercial";
+  // Third party carries motor-wide benefits only (COMESA), not the full commercial list
+  if (found.group === "commercial_tp") return "commercial_tp";
   if (found.group === "medical") return "medical";
   if (found.group === "carriers_liability") return "carriers_liability";
   if (found.group === "professional_indemnity") return "professional_indemnity";
-  // commercial_tp — no benefits for now
   return "none";
 }
 

@@ -6,7 +6,7 @@
 export const BENEFIT_GROUPS = [
   { value: "private", label: "Motor — Private" },
   { value: "commercial", label: "Motor — Commercial" },
-  { value: "both", label: "Motor — Private & Commercial" },
+  { value: "both", label: "Motor — All Types" },
   { value: "medical", label: "Medical / Health" },
   { value: "carriers_liability", label: "Carrier's Liability" },
   { value: "professional_indemnity", label: "Professional Indemnity" },
@@ -22,13 +22,16 @@ export function benefitGroupLabel(value: string): string {
 
 /**
  * Does a benefit option apply to the group of the insurance type being quoted?
- * "both" is the legacy motor-wide value — it covers private and commercial only,
- * never medical or the liability covers.
+ * "both" means motor-wide — private, commercial and commercial third party —
+ * and never medical or the liability covers. Third party carries motor-wide
+ * benefits only (COMESA), not the full commercial list.
  */
+const MOTOR_GROUPS = ["private", "commercial", "commercial_tp"];
+
 export function benefitAppliesTo(applicableTo: string, group: string): boolean {
   if (group === "none") return false;
   if (applicableTo === group) return true;
-  return applicableTo === "both" && (group === "private" || group === "commercial");
+  return applicableTo === "both" && MOTOR_GROUPS.includes(group);
 }
 
 /**
