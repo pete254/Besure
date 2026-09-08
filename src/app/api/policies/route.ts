@@ -41,7 +41,12 @@ const createPolicySchema = z.object({
     bodyType: z.string().optional().nullable(),
     colour: z.string().optional().nullable(),
   }).optional().nullable(),
-  coverType: z.enum(["Comprehensive", "TPO", "TPFT", "medical"]).optional().nullable(),
+  // Non-motor covers (liability, commercial third party) have no cover type —
+  // accept an empty string from the wizard and store it as null.
+  coverType: z
+    .union([z.enum(["Comprehensive", "TPO", "TPFT", "medical"]), z.literal("")])
+    .optional()
+    .nullable(),
   sumInsured: z.string().optional().nullable(),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),

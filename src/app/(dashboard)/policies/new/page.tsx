@@ -10,7 +10,7 @@ import { ArrowLeft, ArrowRight, Check, Upload, X, Eye, RefreshCw } from "lucide-
 import FieldError from "@/components/ui/FieldError";
 import FormErrorBanner from "@/components/ui/FormErrorBanner";
 import DraftBanner from "@/components/DraftBanner";
-import { benefitAppliesTo } from "@/lib/benefit-groups";
+import { benefitAppliesTo, benefitsAffectPremium, MANUAL_PREMIUM_TYPES } from "@/lib/benefit-groups";
 import { useDraft } from "@/hooks/useDraft";
 import {
   validateRequired,
@@ -108,9 +108,8 @@ const INSURANCE_TYPES = [
   { value: "Professional Indemnity", label: "Professional Indemnity", motor: false, group: "professional_indemnity" },
 ];
 
-// Types whose premium is quoted by the insurer and typed in directly
-// (no rate × sum insured calculation) — same handling as Medical / Health.
-const MANUAL_PREMIUM_TYPES = ["Carriers Liability", "Professional Indemnity"];
+// MANUAL_PREMIUM_TYPES (Carrier's Liability / Professional Indemnity) are quoted by
+// the insurer and typed in directly — no rate × sum insured — like Medical / Health.
 
 // Which benefit group applies to each insurance type
 function getBenefitGroup(
@@ -261,6 +260,8 @@ export default function NewPolicyPage() {
   const isMedical = data.insuranceType === "Medical / Health";
   // Liability covers: premium is typed in manually, benefit amounts are typed in manually
   const isManualPremium = MANUAL_PREMIUM_TYPES.includes(data.insuranceType);
+  // Medical + liability covers: benefit amounts are cover limits, not extra premium
+  const benefitsChargeable = benefitsAffectPremium(data.insuranceType);
   const benefitGroup = getBenefitGroup(data.insuranceType);
 
   // Filter benefits based on current insurance type group
@@ -345,9 +346,11 @@ export default function NewPolicyPage() {
           benefitName: b.benefitName,
           amountKes: b.amountKes,
         })),
-        totalBenefits: (benefits || [])
-          .reduce((s: number, b: any) => s + parseFloat(b.amountKes || "0"), 0)
-          .toFixed(2),
+        totalBenefits: benefitsAffectPremium(policy.insuranceType)
+          ? (benefits || [])
+              .reduce((s: number, b: any) => s + parseFloat(b.amountKes || "0"), 0)
+              .toFixed(2)
+          : "0.00",
       }));
       
       // Jump to step 4 (Cover & Valuation) since type/customer/vehicle are prefilled
@@ -372,12 +375,17 @@ export default function NewPolicyPage() {
     setData(prev => ({ ...prev, benefits: [], totalBenefits: "0" }));
   }, [data.insuranceType]);
 
-  // Auto-set cover type to 'medical' for medical policies
+  // Auto-set cover type where the user is not asked to pick one
   useEffect(() => {
     if (data.insuranceType === "Medical / Health") {
       setData(prev => ({ ...prev, coverType: "medical" }));
+    } else if (data.insuranceType === "Motor - Commercial Third Party") {
+      setData(prev => ({ ...prev, coverType: "TPO" }));
+    } else if (!isMotor) {
+      // Liability / other non-motor covers have no cover type at all
+      setData(prev => (prev.coverType ? { ...prev, coverType: "" } : prev));
     }
-  }, [data.insuranceType]);
+  }, [data.insuranceType, isMotor]);
 
   // Fix 4: Reset vehicle/medical data when insurance type switches
   useEffect(() => {
@@ -397,7 +405,8 @@ export default function NewPolicyPage() {
       // Clear medical meta when switching to motor
       setData(prev => ({
         ...prev,
-        coverType: "", // Reset so user picks Comprehensive/TPO/TPFT
+        // Reset so the user picks Comprehensive/TPO/TPFT (commercial TP is always TPO)
+        coverType: prev.insuranceType === "Motor - Commercial Third Party" ? "TPO" : "",
         medicalMeta: {
           inpatientLimit: "", outpatientLimit: "",
           principalCount: "1", dependantCount: "0",
@@ -433,7 +442,9 @@ export default function NewPolicyPage() {
         }
         return b;
       });
-      const totalBenefits = updated.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0).toFixed(2);
+      const totalBenefits = benefitsChargeable
+        ? updated.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0).toFixed(2)
+        : "0.00";
       return { ...prev, benefits: updated, totalBenefits };
     });
   }, [data.sumInsured, allBenefits]);
@@ -441,7 +452,7 @@ export default function NewPolicyPage() {
   // Grand total: basic + benefits → IRA on combined → + stamp
   useEffect(() => {
     const basic = parseFloat(data.basicPremium || "0");
-    const bens = parseFloat(data.totalBenefits || "0");
+    const bens = benefitsChargeable ? parseFloat(data.totalBenefits || "0") : 0;
     const ira = (basic + bens) * 0.0045;
     const stamp = parseFloat(data.stampDuty || "40");
     const phcf = parseFloat(data.phcf || "0");
@@ -451,7 +462,7 @@ export default function NewPolicyPage() {
       iraLevy: ira.toFixed(2),
       grandTotal: grand.toFixed(2),
     }));
-  }, [data.basicPremium, data.totalBenefits, data.stampDuty]);
+  }, [data.basicPremium, data.totalBenefits, data.stampDuty, benefitsChargeable]);
 
   // Keep sumInsured in sync with inpatientLimit for medical policies
   useEffect(() => {
@@ -510,6 +521,8 @@ export default function NewPolicyPage() {
   }
 
   function recalcTotal(updated: BenefitEntry[]) {
+    // Cover-limit benefits never add to the premium — their total is always zero
+    if (!benefitsChargeable) return "0.00";
     return updated.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0).toFixed(2);
   }
 
@@ -669,8 +682,9 @@ export default function NewPolicyPage() {
 
     if (currentStep === 4) {
       if (isMotor && !isMedical) {
-        // Cover type only needed for motor
-        if (!data.coverType) errors.coverType = "⚠️ Please select a cover type (Comprehensive, Third Party, etc.)";
+        // Cover type only needed for motor types where the user actually picks one
+        if (!data.coverType && data.insuranceType !== "Motor - Commercial Third Party")
+          errors.coverType = "⚠️ Please select a cover type (Comprehensive, Third Party, etc.)";
         const sumErr = validateSumInsured(data.sumInsured);
         if (sumErr) errors.sumInsured = `⚠️ ${sumErr}`;
       }
@@ -715,7 +729,9 @@ export default function NewPolicyPage() {
     
     if (isRenewMode && renewSourceId) {
       // Use the renew endpoint — handles vehicle copy, marks old expired, etc.
-      const bens = data.benefits.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0);
+      const bens = benefitsChargeable
+        ? data.benefits.reduce((s, b) => s + parseFloat(b.amountKes || "0"), 0)
+        : 0;
       const basic = (isMedical || isManualPremium)
         ? parseFloat(data.basicPremium || "0")  // Use direct premium for medical / liability covers
         : (parseFloat(data.sumInsured || "0") * parseFloat(data.basicRate || "0") / 100);  // Calculate for motor
@@ -762,6 +778,9 @@ export default function NewPolicyPage() {
       const payload = {
         ...data,
         trainingLevy: "0",
+        // Non-motor covers have no cover type — send null, never an empty string
+        coverType: data.coverType || null,
+        totalBenefits: benefitsChargeable ? data.totalBenefits : "0.00",
         // CRITICAL: Pass null vehicle for medical, data for motor
         vehicle: (isMotor && !isMedical) ? {
           ...data.vehicle,
@@ -1594,14 +1613,16 @@ export default function NewPolicyPage() {
             </div>
             <div style={{ backgroundColor: "var(--bg-app)", borderRadius: "8px", border: "1px solid var(--border)", padding: "16px" }}>
               <p style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "10px" }}>
-                Premium Preview (add benefits in next step)
+                Premium Preview{benefitsChargeable ? " (add benefits in next step)" : ""}
               </p>
               <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "10px", fontStyle: "italic" }}>
-                IRA Levy (0.45%) is calculated on Basic Premium + Benefits combined
+                {benefitsChargeable
+                  ? "IRA Levy (0.45%) is calculated on Basic Premium + Benefits combined"
+                  : "Benefits on this cover are limits only — the premium below is the final figure before levies"}
               </p>
               {[
                 { label: "Basic Premium", value: data.basicPremium },
-                { label: "IRA Levy (0.45% of basic + benefits)", value: data.iraLevy },
+                { label: benefitsChargeable ? "IRA Levy (0.45% of basic + benefits)" : "IRA Levy (0.45% of basic premium)", value: data.iraLevy },
                 { label: "Stamp Duty", value: data.stampDuty },
               ].map(({ label, value }) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
@@ -1628,6 +1649,12 @@ export default function NewPolicyPage() {
                 Benefits for <strong style={{ color: "var(--text-secondary)" }}>{data.insuranceType}</strong>
               </span>
             </p>
+            {!benefitsChargeable && (
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "6px 0 0" }}>
+                These amounts are cover limits — they are already included in the quoted
+                premium and do not change the total payable.
+              </p>
+            )}
           </div>
 
           {benefitGroup === "none" ? (
@@ -1669,8 +1696,16 @@ export default function NewPolicyPage() {
 
           {data.benefits.length > 0 && (
             <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 0", borderTop: "1px solid var(--border)", marginTop: "12px" }}>
-              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Total Benefits: </span>
-              <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--brand)", marginLeft: "8px" }}>{formatKES(data.totalBenefits)}</span>
+              {benefitsChargeable ? (
+                <>
+                  <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Total Benefits: </span>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--brand)", marginLeft: "8px" }}>{formatKES(data.totalBenefits)}</span>
+                </>
+              ) : (
+                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                  {data.benefits.length} benefit{data.benefits.length === 1 ? "" : "s"} selected — no additional premium
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -1783,14 +1818,16 @@ export default function NewPolicyPage() {
               <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{formatKES(data.sumInsured || "0")}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Basic Premium ({data.basicRate || "—"}%)</span>
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Basic Premium{data.basicRate ? ` (${data.basicRate}%)` : ""}</span>
               <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{formatKES(data.basicPremium || "0")}</span>
             </div>
 
             {data.benefits.length > 0 && (
               <>
                 <div style={{ padding: "8px 0 2px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Additional Benefits</span>
+                  <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>
+                    {benefitsChargeable ? "Additional Benefits" : "Cover Limits (included in premium)"}
+                  </span>
                 </div>
                 {data.benefits.map((b) => (
                   <div key={b.benefitOptionId} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0 6px 12px", borderBottom: "1px solid var(--border)" }}>
@@ -1807,7 +1844,9 @@ export default function NewPolicyPage() {
               <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Statutory Levies</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>IRA Levy (0.45% of basic + benefits)</span>
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                {benefitsChargeable ? "IRA Levy (0.45% of basic + benefits)" : "IRA Levy (0.45% of basic premium)"}
+              </span>
               <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{formatKES(data.iraLevy || "0")}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>

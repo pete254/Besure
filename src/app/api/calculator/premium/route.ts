@@ -8,9 +8,7 @@ import { db } from "@/lib/db";
 import { insurers } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-
-// Types quoted as a lump-sum premium — the caller sends basicPremium and no rate
-const MANUAL_PREMIUM_TYPES = ["Carriers Liability", "Professional Indemnity"];
+import { MANUAL_PREMIUM_TYPES, benefitsAffectPremium } from "@/lib/benefit-groups";
 
 const calcSchema = z.object({
   insuranceType: z.enum([
@@ -87,7 +85,12 @@ export async function POST(req: NextRequest) {
       : Math.max(calculatedBasicPremium, minPremium);
     const minimumApplied = !isManualPremium && calculatedBasicPremium < minPremium && minPremium > 0;
 
-    const totalBenefits = benefits.reduce((s, b) => s + b.amountKes, 0);
+    // Medical and the liability covers quote benefits as cover limits — the amounts
+    // are recorded against the policy but never added to the premium.
+    const benefitsChargeable = benefitsAffectPremium(insuranceType);
+    const totalBenefits = benefitsChargeable
+      ? benefits.reduce((s, b) => s + b.amountKes, 0)
+      : 0;
 
     // IRA Levy = 0.45% of (Basic Premium + Total Benefits)
     const iraLevy = (basicPremiumFinal + totalBenefits) * 0.0045;
@@ -113,6 +116,7 @@ export async function POST(req: NextRequest) {
       minimumApplied,
       minPremium: minimumApplied ? minPremium : null,
       totalBenefits: parseFloat(totalBenefits.toFixed(2)),
+      benefitsChargeable,
       iraLevy: parseFloat(iraLevy.toFixed(2)),
       // trainingLevy removed — kept as 0 for schema compatibility
       trainingLevy: 0,

@@ -9,7 +9,7 @@ import {
   Calculator, RefreshCw, Copy, Check, ChevronDown, ChevronUp,
   FileDown, User, Phone, Mail, Car, Loader2, Eye,
 } from "lucide-react";
-import { benefitAppliesTo } from "@/lib/benefit-groups";
+import { benefitAppliesTo, benefitsAffectPremium, MANUAL_PREMIUM_TYPES } from "@/lib/benefit-groups";
 
 interface Insurer {
   id: string; name: string; isActive: boolean;
@@ -49,6 +49,7 @@ interface CalcResult {
   calculatedBasicPremium: number; basicPremium: number; basicPremiumFinal: number;
   minimumApplied: boolean; minPremium: number | null;
   totalBenefits: number;
+  benefitsChargeable: boolean;
   iraLevy: number;
   trainingLevy: number;
   stampDuty: number; phcf: number; grandTotal: number;
@@ -74,9 +75,6 @@ const INSURANCE_TYPES = [
   { value: "Carriers Liability", label: "Carrier's Liability", group: "carriers_liability" },
   { value: "Professional Indemnity", label: "Professional Indemnity", group: "professional_indemnity" },
 ];
-
-// Types quoted as a lump-sum premium — no rate × sum insured calculation
-const MANUAL_PREMIUM_TYPES = ["Carriers Liability", "Professional Indemnity"];
 
 function getBenefitGroup(
   insuranceType: string
@@ -171,6 +169,8 @@ export default function CalculatorPage() {
   }, [selectedInsurerId, insuranceType, insurers]);
 
   const isManualPremium = MANUAL_PREMIUM_TYPES.includes(insuranceType);
+  // Medical + liability covers: benefit amounts are limits, they never change the premium
+  const benefitsChargeable = benefitsAffectPremium(insuranceType);
 
   const canCalculate = isManualPremium
     ? parseFloat(netPremium) > 0
@@ -262,6 +262,7 @@ export default function CalculatorPage() {
           minPremium: freshResult.minPremium,
           benefits: freshResult.benefits,
           totalBenefits: freshResult.totalBenefits,
+          benefitsChargeable: freshResult.benefitsChargeable,
           iraLevy: freshResult.iraLevy,
           stampDuty: freshResult.stampDuty,
           phcf: freshResult.phcf,
@@ -426,13 +427,15 @@ export default function CalculatorPage() {
       ...(result.minimumApplied ? [`  (minimum premium applied: ${fmt(result.minPremium || 0)})`] : []),
       ...(result.benefits.length > 0 ? [
         ``,
-        `Additional Benefits:`,
+        result.benefitsChargeable ? `Additional Benefits:` : `Cover Limits (included in premium):`,
         ...result.benefits.map(b => `  ${b.benefitName}: ${fmt(b.amountKes)}`),
-        `Benefits Total:  ${fmt(result.totalBenefits)}`,
+        ...(result.benefitsChargeable ? [`Benefits Total:  ${fmt(result.totalBenefits)}`] : []),
       ] : []),
       ``,
       `Statutory Levies:`,
-      `  IRA Levy (0.45% of Basic+Benefits): ${fmt(result.iraLevy)}`,
+      result.benefitsChargeable
+        ? `  IRA Levy (0.45% of Basic+Benefits): ${fmt(result.iraLevy)}`
+        : `  IRA Levy (0.45% of Basic Premium): ${fmt(result.iraLevy)}`,
       `  Stamp Duty:          KES 40.00`,
       ``,
       `═══════════════════════════════`,
@@ -706,6 +709,12 @@ export default function CalculatorPage() {
             </button>
             {showBenefits && (
               <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                {!benefitsChargeable && availableBenefits.length > 0 && (
+                  <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "0 0 4px" }}>
+                    These amounts are cover limits — they are already included in the quoted premium
+                    and do not change the total payable.
+                  </p>
+                )}
                 {availableBenefits.length === 0 ? (
                   <p style={{ fontSize: "13px", color: "var(--text-muted)", textAlign: "center", padding: "12px 0" }}>
                     No benefits available for this insurance type.
@@ -834,7 +843,9 @@ export default function CalculatorPage() {
                 {result.benefits.length > 0 && (
                   <>
                     <div style={{ padding: "6px 0 2px" }}>
-                      <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Additional Benefits</span>
+                      <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>
+                        {result.benefitsChargeable ? "Additional Benefits" : "Cover Limits — included in premium"}
+                      </span>
                     </div>
                     {result.benefits.map((b) => (
                       <div key={b.benefitName} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0 5px 10px", borderBottom: "1px solid var(--border)" }}>
@@ -844,10 +855,12 @@ export default function CalculatorPage() {
                         </span>
                       </div>
                     ))}
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--border)", backgroundColor: "rgba(16,185,129,0.04)", paddingLeft: "10px" }}>
-                      <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>Benefits Sub-total</span>
-                      <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>{fmt(result.totalBenefits)}</span>
-                    </div>
+                    {result.benefitsChargeable && (
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--border)", backgroundColor: "rgba(16,185,129,0.04)", paddingLeft: "10px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>Benefits Sub-total</span>
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>{fmt(result.totalBenefits)}</span>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -857,7 +870,9 @@ export default function CalculatorPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
                   <div>
                     <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>IRA Levy (0.45%)</span>
-                    <span style={{ display: "block", fontSize: "10px", color: "var(--text-muted)", marginTop: "1px" }}>On Basic Premium + Benefits</span>
+                    <span style={{ display: "block", fontSize: "10px", color: "var(--text-muted)", marginTop: "1px" }}>
+                      {result.benefitsChargeable ? "On Basic Premium + Benefits" : "On Basic Premium"}
+                    </span>
                   </div>
                   <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{fmt(result.iraLevy)}</span>
                 </div>

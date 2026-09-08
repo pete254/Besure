@@ -419,6 +419,7 @@ interface ProposalData {
   minPremium?: number | null;
   benefits: { benefitName: string; amountKes: number }[];
   totalBenefits: number;
+  benefitsChargeable?: boolean;
   iraLevy: number;
   stampDuty: number;
   phcf: number;
@@ -568,7 +569,9 @@ function ProposalDocument({ data }: { data: ProposalData }) {
               <>
                 <View style={[styles.premiumRow, { backgroundColor: "#f3f4f6" }]}>
                   <Text style={[styles.premiumLabelBold, { fontSize: 7.5, color: TEXT_MUTED }]}>
-                    ADDITIONAL BENEFITS
+                    {data.benefitsChargeable === false
+                      ? "COVER LIMITS (INCLUDED IN PREMIUM)"
+                      : "ADDITIONAL BENEFITS"}
                   </Text>
                   <Text style={[styles.premiumValueMuted, { fontSize: 7.5 }]}></Text>
                 </View>
@@ -580,10 +583,12 @@ function ProposalDocument({ data }: { data: ProposalData }) {
                     </Text>
                   </View>
                 ))}
-                <View style={styles.premiumRowSubtotal}>
-                  <Text style={styles.premiumLabelBold}>Benefits Sub-total</Text>
-                  <Text style={styles.premiumValue}>{fmt(data.totalBenefits)}</Text>
-                </View>
+                {data.benefitsChargeable !== false && (
+                  <View style={styles.premiumRowSubtotal}>
+                    <Text style={styles.premiumLabelBold}>Benefits Sub-total</Text>
+                    <Text style={styles.premiumValue}>{fmt(data.totalBenefits)}</Text>
+                  </View>
+                )}
               </>
             )}
 
@@ -598,7 +603,9 @@ function ProposalDocument({ data }: { data: ProposalData }) {
               <View style={{ flex: 1 }}>
                 <Text style={styles.premiumLabel}>IRA Levy (0.45%)</Text>
                 <Text style={{ fontSize: 7, color: TEXT_MUTED, marginTop: 1 }}>
-                  Applied on Basic Premium + Benefits
+                  {data.benefitsChargeable === false
+                    ? "Applied on Basic Premium"
+                    : "Applied on Basic Premium + Benefits"}
                 </Text>
               </View>
               <Text style={styles.premiumValue}>{fmt(data.iraLevy)}</Text>
@@ -743,6 +750,7 @@ const proposalSchema = require("zod").z.object({
     amountKes: require("zod").z.number(),
   })).default([]),
   totalBenefits: require("zod").z.number().default(0),
+  benefitsChargeable: require("zod").z.boolean().default(true),
   iraLevy: require("zod").z.number(),
   stampDuty: require("zod").z.number().default(40),
   phcf: require("zod").z.number().default(0),

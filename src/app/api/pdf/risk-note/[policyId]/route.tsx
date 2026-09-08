@@ -404,7 +404,7 @@ function RiskNoteDocument({ data }: { data: any }) {
             <Text style={styles.premiumLabel}>Basic Premium</Text>
             <Text style={styles.premiumValue}>{fmt(policy.basicPremium)}</Text>
           </View>
-          {benefits && benefits.length > 0 && (
+          {benefits && benefits.length > 0 && totalBenefits > 0 && (
             <View style={styles.premiumRow}>
               <Text style={styles.premiumLabel}>Additional Benefits Total</Text>
               <Text style={styles.premiumValue}>{fmt(policy.totalBenefits)}</Text>

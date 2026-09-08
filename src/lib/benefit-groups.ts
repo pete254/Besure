@@ -30,3 +30,20 @@ export function benefitAppliesTo(applicableTo: string, group: string): boolean {
   if (applicableTo === group) return true;
   return applicableTo === "both" && (group === "private" || group === "commercial");
 }
+
+/**
+ * Types quoted as a lump-sum premium — the premium is typed in, never
+ * calculated as rate × sum insured.
+ */
+export const MANUAL_PREMIUM_TYPES = ["Carriers Liability", "Professional Indemnity"];
+
+/**
+ * Types whose benefit amounts are cover limits, not extra premium.
+ * Selecting a benefit on these records the limit but must never move the
+ * premium — the quoted premium already covers them.
+ */
+export const LIMIT_ONLY_BENEFIT_TYPES = ["Medical / Health", ...MANUAL_PREMIUM_TYPES];
+
+export function benefitsAffectPremium(insuranceType: string): boolean {
+  return !LIMIT_ONLY_BENEFIT_TYPES.includes(insuranceType);
+}
